@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRenderLoop } from '@tresjs/core'
+import { ref, computed, watchEffect } from 'vue'
 import * as THREE from 'three'
 import germanyGeoJson from '~/assets/geo/germany.json'
 
@@ -25,15 +24,13 @@ function project(lat: number, lon: number): [number, number] {
   return [x, z]
 }
 
-// Germany outline
-const outlineGeometry = computed(() => {
-  const coords = germanyGeoJson.features[0].geometry.coordinates[0]
-  const points = coords.map(([lon, lat]: number[]) => {
-    const [x, z] = project(lat, lon)
-    return new THREE.Vector3(x, 0, z)
-  })
-  return new THREE.BufferGeometry().setFromPoints(points)
-})
+function getRings(): number[][][] {
+  const geom = germanyGeoJson.features[0].geometry
+  if (geom.type === 'MultiPolygon') {
+    return (geom.coordinates as number[][][][]).map(poly => poly[0])
+  }
+  return [(geom.coordinates as number[][][])[0]]
+}
 
 const outlineMaterial = new THREE.LineBasicMaterial({
   color: 0x111111,
@@ -41,25 +38,36 @@ const outlineMaterial = new THREE.LineBasicMaterial({
   transparent: true,
 })
 
-const outlineLine = computed(() => new THREE.Line(outlineGeometry.value, outlineMaterial))
-
-// Country fill
-const countryShape = computed(() => {
-  const shape = new THREE.Shape()
-  const coords = germanyGeoJson.features[0].geometry.coordinates[0]
-  const first = project(coords[0][1], coords[0][0])
-  shape.moveTo(first[0], -first[1])
-  for (let i = 1; i < coords.length; i++) {
-    const [x, z] = project(coords[i][1], coords[i][0])
-    shape.lineTo(x, -z)
+const outlineGroup = computed(() => {
+  const group = new THREE.Group()
+  for (const ring of getRings()) {
+    const points = ring.map(([lon, lat]) => {
+      const [x, z] = project(lat, lon)
+      return new THREE.Vector3(x, 0, z)
+    })
+    const geom = new THREE.BufferGeometry().setFromPoints(points)
+    const line = new THREE.LineLoop(geom, outlineMaterial)
+    group.add(line)
   }
-  shape.closePath()
-  return shape
+  return group
 })
 
-const shapeGeometry = computed(() => new THREE.ShapeGeometry(countryShape.value))
+const fillGeometry = computed(() => {
+  const shapes: THREE.Shape[] = []
+  for (const ring of getRings()) {
+    const shape = new THREE.Shape()
+    const first = project(ring[0][1], ring[0][0])
+    shape.moveTo(first[0], -first[1])
+    for (let i = 1; i < ring.length; i++) {
+      const [x, z] = project(ring[i][1], ring[i][0])
+      shape.lineTo(x, -z)
+    }
+    shape.closePath()
+    shapes.push(shape)
+  }
+  return new THREE.ShapeGeometry(shapes)
+})
 
-// City bars
 const maxCount = computed(() => {
   if (props.cityData.length === 0) return 1
   return Math.max(...props.cityData.map(d => d.count))
@@ -79,14 +87,21 @@ const cityPositions = computed(() =>
 
 const hoveredCity = ref<string | null>(null)
 
+function getScreenCoords(event: any): { x: number; y: number } {
+  const native = event?.nativeEvent ?? event
+  return { x: native?.clientX ?? 0, y: native?.clientY ?? 0 }
+}
+
 function onBarPointerEnter(city: CityDatum, event: any) {
   hoveredCity.value = city.city
-  emit('hover', { city: city.city, count: city.count, screenX: event?.clientX ?? 0, screenY: event?.clientY ?? 0 })
+  const { x, y } = getScreenCoords(event)
+  emit('hover', { city: city.city, count: city.count, screenX: x, screenY: y })
 }
 
 function onBarPointerMove(city: CityDatum, event: any) {
   if (hoveredCity.value === city.city) {
-    emit('hover', { city: city.city, count: city.count, screenX: event?.clientX ?? 0, screenY: event?.clientY ?? 0 })
+    const { x, y } = getScreenCoords(event)
+    emit('hover', { city: city.city, count: city.count, screenX: x, screenY: y })
   }
 }
 
@@ -94,18 +109,40 @@ function onBarPointerLeave() {
   hoveredCity.value = null
   emit('hover', null)
 }
+
+const outlineRef = ref<any>(null)
+const fillRef = ref<any>(null)
+
+watchEffect(() => {
+  const outline = outlineRef.value
+  if (outline) {
+    outline.raycast = () => {}
+    outline.pointerEvents = 'none'
+    outline.traverse((child: any) => {
+      child.raycast = () => {}
+      child.pointerEvents = 'none'
+    })
+  }
+})
+
+watchEffect(() => {
+  const fill = fillRef.value
+  if (fill) {
+    fill.raycast = () => {}
+    fill.pointerEvents = 'none'
+  }
+})
 </script>
 
 <template>
   <TresGroup>
-    <!-- Germany outline wireframe -->
-    <primitive :object="outlineLine" />
+    <primitive ref="outlineRef" :object="outlineGroup" />
 
-    <!-- Country surface — very light fill -->
     <TresMesh
+      ref="fillRef"
       :rotation="[-Math.PI / 2, 0, 0]"
       :position="[0, -0.005, 0]"
-      :geometry="shapeGeometry"
+      :geometry="fillGeometry"
     >
       <TresMeshBasicMaterial
         color="#e8e8e8"
@@ -116,26 +153,24 @@ function onBarPointerLeave() {
       />
     </TresMesh>
 
-    <!-- City bars — wireframe style -->
     <TresGroup
       v-for="cp in cityPositions"
       :key="cp.city.city"
     >
-      <!-- Wireframe bar -->
       <TresMesh
         :position="[cp.x, cp.height / 2, cp.z]"
-        @pointer-enter="(e: any) => onBarPointerEnter(cp.city, e)"
-        @pointer-move="(e: any) => onBarPointerMove(cp.city, e)"
-        @pointer-leave="onBarPointerLeave"
+        :pointer-events="'auto'"
+        @pointerenter="(e: any) => onBarPointerEnter(cp.city, e)"
+        @pointermove="(e: any) => onBarPointerMove(cp.city, e)"
+        @pointerleave="onBarPointerLeave"
       >
-        <TresBoxGeometry :args="[0.12, cp.height, 0.12]" />
+        <TresBoxGeometry :args="[0.2, cp.height, 0.2]" />
         <TresMeshBasicMaterial
           :color="hoveredCity === cp.city.city ? '#0055ff' : '#111111'"
           :wireframe="true"
         />
       </TresMesh>
 
-      <!-- Solid inner bar -->
       <TresMesh :position="[cp.x, cp.height / 2, cp.z]">
         <TresBoxGeometry :args="[0.08, cp.height, 0.08]" />
         <TresMeshBasicMaterial
@@ -145,7 +180,6 @@ function onBarPointerLeave() {
         />
       </TresMesh>
 
-      <!-- Base dot -->
       <TresMesh
         :position="[cp.x, 0.01, cp.z]"
         :rotation="[-Math.PI / 2, 0, 0]"

@@ -1,88 +1,87 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@layer base {
-  :root {
-    --ink: #1a1a2e;
-    --ink-light: #3d3d5c;
-    --ink-faint: #9999b3;
-    --ink-ghost: #ccccda;
-    --surface: #fafaf8;
-    --surface-warm: #f4f3f0;
-    --surface-ruled: #eeeee8;
-    --accent: #e63946;
-    --accent-dim: #e6394620;
-    --grid-line: #ddddd4;
-  }
+@theme {
+  --font-mono: "IBM Plex Mono", monospace;
+  --font-sans: "IBM Plex Sans", sans-serif;
+
+  --color-ink: #1a1a2e;
+  --color-ink-light: #3d3d5c;
+  --color-ink-faint: #9999b3;
+  --color-ink-ghost: #ccccda;
+
+  --color-surface: #fafaf8;
+  --color-surface-warm: #f4f3f0;
+  --color-surface-ruled: #eeeee8;
+
+  --color-accent: #e63946;
+  --color-accent-dim: #e6394620;
+
+  --color-grid-line: #ddddd4;
 }
 
 body {
-  background: var(--surface);
-  color: var(--ink);
-  font-family: 'IBM Plex Sans', sans-serif;
-  overflow: hidden;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
 /* ── Blueprint grid background ─────────────────────────── */
 .blueprint-grid {
   background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    linear-gradient(var(--color-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid-line) 1px, transparent 1px);
   background-size: 24px 24px;
   background-position: -1px -1px;
 }
 
 /* ── Panel system ──────────────────────────────────────── */
-@layer components {
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--ink-ghost);
-    position: relative;
-  }
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-ghost);
+  position: relative;
+}
 
-  .panel-header {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--grid-line);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+.panel-header {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-grid-line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-  .panel-header::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border: 1.5px solid var(--accent);
-    display: inline-block;
-    flex-shrink: 0;
-  }
+.panel-header::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid var(--color-accent);
+  display: inline-block;
+  flex-shrink: 0;
+}
 
-  .stat-value {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--ink);
-    letter-spacing: -0.02em;
-    line-height: 1;
-  }
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-ink);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
 
-  .stat-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    color: var(--ink-faint);
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    margin-top: 4px;
-  }
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-top: 4px;
 }
 
 /* ── Corner registration marks ─────────────────────────── */
@@ -100,17 +99,16 @@ body {
 .reg-marks::before {
   top: -1px;
   left: -1px;
-  border-top: 2px solid var(--ink);
-  border-left: 2px solid var(--ink);
+  border-top: 2px solid var(--color-ink);
+  border-left: 2px solid var(--color-ink);
 }
 .reg-marks::after {
   bottom: -1px;
   right: -1px;
-  border-bottom: 2px solid var(--ink);
-  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--color-ink);
+  border-right: 2px solid var(--color-ink);
 }
 
-/* Extra corners via child pseudo-elements */
 .reg-marks-full::before {
   content: '';
   position: absolute;
@@ -118,8 +116,8 @@ body {
   right: -1px;
   width: 12px;
   height: 12px;
-  border-top: 2px solid var(--ink);
-  border-right: 2px solid var(--ink);
+  border-top: 2px solid var(--color-ink);
+  border-right: 2px solid var(--color-ink);
   pointer-events: none;
 }
 .reg-marks-full::after {
@@ -129,8 +127,8 @@ body {
   left: -1px;
   width: 12px;
   height: 12px;
-  border-bottom: 2px solid var(--ink);
-  border-left: 2px solid var(--ink);
+  border-bottom: 2px solid var(--color-ink);
+  border-left: 2px solid var(--color-ink);
   pointer-events: none;
 }
 
@@ -151,7 +149,7 @@ body {
   opacity: 0;
 }
 .glitch-title::before {
-  color: var(--accent);
+  color: var(--color-accent);
   animation: glitch-shift-r 6s ease-in-out infinite;
 }
 .glitch-title::after {
@@ -191,18 +189,18 @@ body {
 /* ── Data bar ──────────────────────────────────────────── */
 .data-bar-track {
   height: 3px;
-  background: var(--surface-ruled);
+  background: var(--color-surface-ruled);
   position: relative;
   overflow: hidden;
 }
 .data-bar-fill {
   height: 100%;
-  background: var(--ink);
+  background: var(--color-ink);
   transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .data-bar-fill-accent {
   height: 100%;
-  background: var(--accent);
+  background: var(--color-accent);
   transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -232,17 +230,17 @@ body {
   position: absolute;
   top: -2px;
   right: -2px;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--ink-faint);
+  color: var(--color-ink-faint);
   line-height: 1;
   pointer-events: none;
 }
 
 /* ── Tooltip panel ─────────────────────────────────────── */
 .tooltip-panel {
-  background: var(--surface);
-  border: 1.5px solid var(--ink);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-ink);
   padding: 10px 14px;
   pointer-events: none;
   box-shadow: 3px 3px 0 rgba(0,0,0,0.08);
@@ -256,8 +254,8 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--ink-ghost);
+  background: var(--color-ink-ghost);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-faint);
+  background: var(--color-ink-faint);
 }

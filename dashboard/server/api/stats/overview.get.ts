@@ -7,6 +7,8 @@
  *   - breakdown by source
  */
 
+import { stat } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { getDb } from '../../database'
 
 export default defineEventHandler(async () => {
@@ -43,6 +45,13 @@ export default defineEventHandler(async () => {
     }
   }
 
+  let lastUpdated: string | null = null
+  try {
+    const dbPath = resolve(process.cwd(), process.env.DATABASE_PATH || '.data/jobs.db')
+    const st = await stat(dbPath)
+    lastUpdated = st.mtime.toISOString()
+  } catch {}
+
   return {
     total,
     totalCompanies,
@@ -51,5 +60,6 @@ export default defineEventHandler(async () => {
     withSalary,
     withDescription,
     sources,
+    lastUpdated,
   }
 })

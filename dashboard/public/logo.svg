@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 28" fill="none">
+  <g stroke="#1a1a2e" stroke-width="1.5">
+    <circle cx="8" cy="14" r="3" fill="#e63946"/>
+    <circle cx="20" cy="6" r="2" fill="#1a1a2e"/>
+    <circle cx="20" cy="22" r="2" fill="#1a1a2e"/>
+    <circle cx="32" cy="14" r="2.5" fill="#1a1a2e"/>
+    <line x1="10.5" y1="12.5" x2="18" y2="7"/>
+    <line x1="10.5" y1="15.5" x2="18" y2="21"/>
+    <line x1="22" y1="7" x2="30" y2="13"/>
+    <line x1="22" y1="21" x2="30" y2="15"/>
+  </g>
+  <text x="42" y="20" font-family="'IBM Plex Mono', monospace" font-size="16" font-weight="700" fill="#1a1a2e">ai-verticals<tspan fill="#e63946">.dev</tspan></text>
+</svg>

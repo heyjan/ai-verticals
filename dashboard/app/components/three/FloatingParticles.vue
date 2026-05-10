@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRenderLoop } from '@tresjs/core'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import * as THREE from 'three'
 
 const PARTICLE_COUNT = 100
@@ -20,21 +19,36 @@ geometry.setAttribute('position', new THREE.BufferAttribute(positionsArray, 3))
 
 const pointsRef = ref<THREE.Points | null>(null)
 
-const { onLoop } = useRenderLoop()
+let rafId = 0
+let lastTime = 0
 
-onLoop(({ delta }) => {
-  if (!pointsRef.value) return
-  const positions = pointsRef.value.geometry.attributes.position
-  const arr = positions.array as Float32Array
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    arr[i * 3 + 1] += 0.08 * delta
-    if (arr[i * 3 + 1] > SPREAD_Y) {
-      arr[i * 3 + 1] = 0
-      arr[i * 3] = (Math.random() - 0.5) * SPREAD_X * 2
-      arr[i * 3 + 2] = (Math.random() - 0.5) * SPREAD_Z * 2
+function animate(time: number) {
+  const delta = lastTime ? (time - lastTime) / 1000 : 0.016
+  lastTime = time
+
+  if (pointsRef.value) {
+    const positions = pointsRef.value.geometry.attributes.position
+    const arr = positions.array as Float32Array
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      arr[i * 3 + 1] += 0.08 * delta
+      if (arr[i * 3 + 1] > SPREAD_Y) {
+        arr[i * 3 + 1] = 0
+        arr[i * 3] = (Math.random() - 0.5) * SPREAD_X * 2
+        arr[i * 3 + 2] = (Math.random() - 0.5) * SPREAD_Z * 2
+      }
     }
+    positions.needsUpdate = true
   }
-  positions.needsUpdate = true
+
+  rafId = requestAnimationFrame(animate)
+}
+
+onMounted(() => {
+  rafId = requestAnimationFrame(animate)
+})
+
+onBeforeUnmount(() => {
+  cancelAnimationFrame(rafId)
 })
 </script>
 

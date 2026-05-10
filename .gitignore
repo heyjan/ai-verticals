@@ -10,6 +10,18 @@ node_modules/
 .data/
 *.db
 
+# Raw scrape data (large, regenerable)
+data/glassdoor_jobs_*.json
+data/glassdoor_cities_2*.json
+data/glassdoor_cities_2*.csv
+data/linkedin_jobs_*.json
+data/glassdoor_all_combined.json
+data/linkedin_all_combined.json
+
+# Playwright artifacts
+test-results/
+dashboard/test-results/
+
 # Logs
 *.log
 

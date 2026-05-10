@@ -39,7 +39,7 @@ export default defineNitroPlugin(async () => {
   }
 
   // Resolve the data file path relative to the project root
-  const dataFileRaw = process.env.DATA_FILE_PATH || '../data/merged_jobs_20260511_083938.json'
+  const dataFileRaw = process.env.DATA_FILE_PATH || '../data/merged_jobs_20260511_193629.json'
   const dataFilePath = resolve(process.cwd(), dataFileRaw)
   console.log(`[seed] Reading jobs from ${dataFilePath}`)
 

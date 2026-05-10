@@ -4,10 +4,9 @@ import { OrbitControls } from '@tresjs/cientos'
 
 <template>
   <TresCanvas
-    clear-color="#f5f5f5"
+    clear-color="#00000000"
     :antialias="true"
     :alpha="true"
-    window-size
   >
     <TresPerspectiveCamera :position="[0, 10, 14]" :look-at="[0, 0, 0]" />
 
