@@ -1,0 +1,33 @@
+{
+  "name": "ai-job-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build && cp node_modules/sql.js/dist/sql-wasm.wasm .output/server/node_modules/sql.js/dist/",
+    "preview": "nuxt preview",
+    "generate": "nuxt generate",
+    "seed": "tsx server/database/seed.ts"
+  },
+  "dependencies": {
+    "@tresjs/cientos": "^4.1.0",
+    "@tresjs/core": "^4.3.3",
+    "@tresjs/nuxt": "^5.6.0",
+    "d3-geo": "^3.1.1",
+    "d3-scale": "^4.0.2",
+    "nuxt": "^3.17.2",
+    "sql.js": "^1.12.0",
+    "three": "^0.170.0",
+    "topojson-client": "^3.1.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@nuxtjs/tailwindcss": "^6.13.2",
+    "@types/d3-geo": "^3.1.0",
+    "@types/d3-scale": "^4.0.8",
+    "@types/three": "^0.170.0",
+    "@types/topojson-client": "^3.1.5",
+    "tsx": "^4.19.4",
+    "typescript": "^5.7.3"
+  }
+}

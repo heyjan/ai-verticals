@@ -1,0 +1,15 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - db-data:/app/.data
+      - ../data:/app/data:ro
+    environment:
+      - DATA_FILE_PATH=/app/data/merged_jobs_20260511_083938.json
+      - DATABASE_PATH=/app/.data/jobs.db
+      - HOST=0.0.0.0
+
+volumes:
+  db-data:
