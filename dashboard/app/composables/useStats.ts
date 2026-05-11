@@ -1,9 +1,3 @@
-/**
- * Composable that fetches all dashboard statistics from the API.
- *
- * Each endpoint is fetched lazily so the page can render immediately
- * while data streams in.
- */
 export function useStats() {
   const overview = useFetch('/api/stats/overview', { lazy: true })
   const byCategory = useFetch('/api/stats/by-category', { lazy: true })

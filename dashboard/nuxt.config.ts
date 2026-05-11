@@ -1,7 +1,8 @@
+import tailwindcss from '@tailwindcss/vite'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-11',
   modules: [
-    '@nuxtjs/tailwindcss',
     '@tresjs/nuxt',
   ],
   components: [
@@ -10,8 +11,9 @@ export default defineNuxtConfig({
   tres: {
     glsl: true,
   },
-  tailwindcss: {
-    cssPath: '~/assets/css/main.css',
+  css: ['~/assets/css/main.css'],
+  vite: {
+    plugins: [tailwindcss()],
   },
   app: {
     head: {

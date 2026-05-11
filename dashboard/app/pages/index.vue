@@ -1,11 +1,11 @@
 <script setup lang="ts">
 const { overview, byCategory, byCity, byLevel, topCompanies } = useStats()
 
-const stats = computed(() => overview.data.value as Record<string, any> | null)
-const categories = computed(() => (byCategory.data.value as any[] | null) ?? [])
-const cities = computed(() => (byCity.data.value as any[] | null) ?? [])
-const levels = computed(() => (byLevel.data.value as any[] | null) ?? [])
-const companies = computed(() => (topCompanies.data.value as any[] | null) ?? [])
+const stats = computed(() => overview.data.value as Record<string, any> | undefined)
+const categories = computed(() => (byCategory.data.value as any[] | undefined) ?? [])
+const cities = computed(() => (byCity.data.value as any[] | undefined) ?? [])
+const levels = computed(() => (byLevel.data.value as any[] | undefined) ?? [])
+const companies = computed(() => (topCompanies.data.value as any[] | undefined) ?? [])
 
 const isLoading = computed(
   () => overview.pending.value || byCategory.pending.value,
@@ -217,7 +217,7 @@ function pct(value: number, max: number): string {
             </div>
             <div class="data-bar-track">
               <div
-                class="data-bar-fill group-hover:!bg-accent transition-colors"
+                class="data-bar-fill group-hover:bg-accent! transition-colors"
                 :style="{ width: pct(cat.count, maxCategoryCount) }"
               />
             </div>
@@ -257,7 +257,7 @@ function pct(value: number, max: number): string {
               </div>
               <div class="data-bar-track">
                 <div
-                  class="data-bar-fill group-hover:!bg-accent transition-colors"
+                  class="data-bar-fill group-hover:bg-accent! transition-colors"
                   :style="{ width: pct(city.count, maxCityCount) }"
                 />
               </div>
@@ -360,14 +360,14 @@ function pct(value: number, max: number): string {
   overflow: hidden;
 }
 
-.dash-header     { grid-column: 1 / -1; padding-bottom: 12px; border-bottom: 1px solid var(--ink-ghost); }
+.dash-header     { grid-column: 1 / -1; padding-bottom: 12px; border-bottom: 1px solid var(--color-ink-ghost); }
 .dash-stats      { grid-column: 1; grid-row: 2; }
 .dash-viewport   { grid-column: 2; grid-row: 2; }
 .dash-categories { grid-column: 3; grid-row: 2; }
 .dash-cities     { grid-column: 1; grid-row: 3; }
 .dash-levels     { grid-column: 2; grid-row: 3; }
 .dash-companies  { grid-column: 3; grid-row: 3; }
-.dash-footer     { grid-column: 1 / -1; padding-top: 8px; border-top: 1px solid var(--ink-ghost); }
+.dash-footer     { grid-column: 1 / -1; padding-top: 8px; border-top: 1px solid var(--color-ink-ghost); }
 
 @media (max-width: 1100px) {
   .dash {

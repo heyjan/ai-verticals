@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRenderLoop } from '@tresjs/core'
+import { useLoop } from '@tresjs/core'
 import * as THREE from 'three'
 
 const PARTICLE_COUNT = 100
@@ -20,9 +20,9 @@ geometry.setAttribute('position', new THREE.BufferAttribute(positionsArray, 3))
 
 const pointsRef = ref<THREE.Points | null>(null)
 
-const { onLoop } = useRenderLoop()
+const { onBeforeRender } = useLoop()
 
-onLoop(({ delta }) => {
+onBeforeRender(({ delta }) => {
   if (!pointsRef.value) return
   const positions = pointsRef.value.geometry.attributes.position
   const arr = positions.array as Float32Array
