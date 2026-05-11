@@ -23,7 +23,6 @@ body {
   background: var(--color-surface);
   color: var(--color-ink);
   font-family: var(--font-sans);
-  overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -37,54 +36,52 @@ body {
 }
 
 /* ── Panel system ──────────────────────────────────────── */
-@layer components {
-  .panel {
-    background: var(--color-surface);
-    border: 1px solid var(--color-ink-ghost);
-    position: relative;
-  }
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-ink-ghost);
+  position: relative;
+}
 
-  .panel-header {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--color-ink-faint);
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--color-grid-line);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+.panel-header {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-grid-line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-  .panel-header::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border: 1.5px solid var(--color-accent);
-    display: inline-block;
-    flex-shrink: 0;
-  }
+.panel-header::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid var(--color-accent);
+  display: inline-block;
+  flex-shrink: 0;
+}
 
-  .stat-value {
-    font-family: var(--font-mono);
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--color-ink);
-    letter-spacing: -0.02em;
-    line-height: 1;
-  }
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-ink);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
 
-  .stat-label {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    color: var(--color-ink-faint);
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    margin-top: 4px;
-  }
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--color-ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-top: 4px;
 }
 
 /* ── Corner registration marks ─────────────────────────── */

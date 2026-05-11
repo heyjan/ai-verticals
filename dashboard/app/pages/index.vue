@@ -11,6 +11,12 @@ const isLoading = computed(
   () => overview.pending.value || byCategory.pending.value,
 )
 
+const lastUpdated = computed(() => {
+  const iso = (stats.value as any)?.lastUpdated
+  if (!iso) return null
+  return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+})
+
 const maxCategoryCount = computed(() => {
   if (!categories.value.length) return 1
   return Math.max(...categories.value.map((c: any) => c.count))
@@ -59,31 +65,39 @@ function pct(value: number, max: number): string {
   <div class="dash blueprint-grid">
     <!-- ════════ HEADER ════════ -->
     <header class="dash-header">
-      <div class="flex items-baseline gap-6">
-        <h1
-          class="glitch-title font-mono text-[15px] font-bold uppercase tracking-[0.35em] text-ink"
-          data-text="AI JOB COMMAND CENTER"
-        >
-          AI JOB COMMAND CENTER
-        </h1>
-        <div class="h-px flex-1 bg-ink-ghost" />
+      <div class="flex items-center justify-between h-full">
+        <div class="flex items-center gap-4">
+          <img src="/logo.svg" alt="ai-verticals.dev" class="h-6" />
+          <div class="h-5 w-px bg-ink-ghost" />
+          <p class="font-mono text-[9px] uppercase tracking-[0.25em] text-ink-faint">
+            {{ stats?.total ?? '...' }} records
+          </p>
+        </div>
         <div class="flex items-center gap-4">
           <span class="status-flicker flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
             <span
               class="block h-[5px] w-[5px] rounded-full"
-              :class="isLoading ? 'animate-pulse bg-amber-500' : 'bg-accent'"
+              :class="isLoading ? 'animate-pulse bg-amber-500' : 'bg-emerald-500'"
             />
             {{ isLoading ? 'SYNCING' : 'ACTIVE' }}
           </span>
-          <span class="font-mono text-[9px] tracking-[0.15em] text-ink-ghost">
-            {{ new Date().toLocaleDateString('de-DE') }}
+          <span v-if="lastUpdated" class="font-mono text-[9px] tracking-[0.15em] text-ink-ghost">
+            Last updated {{ lastUpdated }}
           </span>
         </div>
       </div>
-      <p class="mt-2 font-mono text-[9px] uppercase tracking-[0.25em] text-ink-faint">
-        Labour market intelligence &mdash; Federal Republic of Germany &mdash; {{ stats?.total ?? '...' }} records indexed
-      </p>
     </header>
+
+    <!-- ════════ SUBHEADER ════════ -->
+    <div class="dash-subheader">
+      <p class="text-[13px] leading-relaxed text-ink-light">
+        Wo wird KI in Deutschland wirklich eingesetzt? Dieses Dashboard analysiert
+        Stellenanzeigen aus verschiedenen Quellen und macht sichtbar, welche Unternehmen
+        KI-Lösungen implementieren &mdash; in welchen Städten, Branchen und Rollen.
+        Entstanden an einem langweiligen Sonntag, mittlerweile eine gepflegte Datenquelle
+        für alle, die KI-Adoption im deutschen Markt verstehen wollen.
+      </p>
+    </div>
 
     <!-- ════════ STATS COLUMN ════════ -->
     <aside class="dash-stats panel reg-marks p-5">
@@ -336,14 +350,20 @@ function pct(value: number, max: number): string {
       </template>
     </section>
 
-    <!-- ════════ FOOTER LINE ════════ -->
+    <!-- ════════ FOOTER ════════ -->
     <footer class="dash-footer flex items-center justify-between">
-      <span class="font-mono text-[7px] uppercase tracking-[0.3em] text-ink-ghost">
-        LinkedIn + Glassdoor // merged dataset // deduplicated
+      <span class="font-mono text-[9px] tracking-[0.1em] text-ink-faint">
+        built with &lt;3 by
+        <a href="https://heyjan.de" target="_blank" rel="noopener" class="text-ink-light hover:text-accent transition-colors">heyjan.de</a>
       </span>
-      <span class="font-mono text-[7px] uppercase tracking-[0.3em] text-ink-ghost">
-        v1.0.0 // ai-job-classifier
-      </span>
+      <div class="flex items-center gap-4">
+        <a href="https://github.com/heyjan" target="_blank" rel="noopener" class="text-ink-faint hover:text-ink transition-colors" aria-label="GitHub">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+        <a href="https://linkedin.com/in/heyjan" target="_blank" rel="noopener" class="text-ink-faint hover:text-ink transition-colors" aria-label="LinkedIn">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        </a>
+      </div>
     </footer>
   </div>
 </template>
@@ -352,46 +372,78 @@ function pct(value: number, max: number): string {
 .dash {
   display: grid;
   grid-template-columns: 220px 1fr 260px;
-  grid-template-rows: auto 1fr 220px auto;
+  grid-template-rows: 60px auto minmax(450px, 1fr) auto auto;
   gap: 6px;
-  padding: 16px;
-  height: 100vh;
+  padding: 0 16px;
   width: 100vw;
-  overflow: hidden;
 }
 
-.dash-header     { grid-column: 1 / -1; padding-bottom: 12px; border-bottom: 1px solid var(--color-ink-ghost); }
-.dash-stats      { grid-column: 1; grid-row: 2; }
-.dash-viewport   { grid-column: 2; grid-row: 2; }
-.dash-categories { grid-column: 3; grid-row: 2; }
-.dash-cities     { grid-column: 1; grid-row: 3; }
-.dash-levels     { grid-column: 2; grid-row: 3; }
-.dash-companies  { grid-column: 3; grid-row: 3; }
-.dash-footer     { grid-column: 1 / -1; padding-top: 8px; border-top: 1px solid var(--color-ink-ghost); }
+.dash-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  background: #fff;
+  border-bottom: 1px solid var(--color-ink-ghost);
+  margin: 0 -16px;
+  padding: 0 32px;
+}
+.dash-subheader {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  background: #fff;
+  margin: 0 -16px;
+  padding: 0 32px;
+  max-width: none;
+}
+.dash-subheader > p {
+  max-width: 720px;
+}
+.dash-stats      { grid-column: 1; grid-row: 3; }
+.dash-viewport   { grid-column: 2; grid-row: 3; }
+.dash-categories { grid-column: 3; grid-row: 3; }
+.dash-cities     { grid-column: 1; grid-row: 4; }
+.dash-levels     { grid-column: 2; grid-row: 4; }
+.dash-companies  { grid-column: 3; grid-row: 4; }
+.dash-footer {
+  grid-column: 1 / -1;
+  margin: 0 -16px;
+  padding: 0 32px;
+  height: 48px;
+  border-top: 1px solid var(--color-ink-ghost);
+}
 
 @media (max-width: 1100px) {
   .dash {
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto auto auto auto;
+    grid-template-rows: 60px auto auto auto auto auto auto;
     height: auto;
-    overflow-y: auto;
   }
   .dash-header     { grid-column: 1 / -1; grid-row: 1; }
-  .dash-stats      { grid-column: 1; grid-row: 2; }
-  .dash-categories { grid-column: 2; grid-row: 2; }
-  .dash-viewport   { grid-column: 1 / -1; grid-row: 3; min-height: 400px; }
-  .dash-cities     { grid-column: 1; grid-row: 4; }
-  .dash-levels     { grid-column: 2; grid-row: 4; }
-  .dash-companies  { grid-column: 1 / -1; grid-row: 5; }
-  .dash-footer     { grid-column: 1 / -1; grid-row: 6; }
+  .dash-subheader  { grid-column: 1 / -1; grid-row: 2; }
+  .dash-stats      { grid-column: 1; grid-row: 3; }
+  .dash-categories { grid-column: 2; grid-row: 3; }
+  .dash-viewport   { grid-column: 1 / -1; grid-row: 4; min-height: 400px; }
+  .dash-cities     { grid-column: 1; grid-row: 5; }
+  .dash-levels     { grid-column: 2; grid-row: 5; }
+  .dash-companies  { grid-column: 1 / -1; grid-row: 6; }
+  .dash-footer     { grid-column: 1 / -1; grid-row: 7; }
 }
 
 @media (max-width: 640px) {
   .dash {
     grid-template-columns: 1fr;
-    padding: 10px;
+    padding: 0 10px;
   }
-  .dash-header, .dash-stats, .dash-viewport, .dash-categories,
+  .dash-header {
+    margin: 0 -10px;
+    padding: 0 20px;
+  }
+  .dash-footer {
+    margin: 0 -10px;
+    padding: 0 20px;
+  }
+  .dash-header, .dash-subheader, .dash-stats, .dash-viewport, .dash-categories,
   .dash-cities, .dash-levels, .dash-companies, .dash-footer {
     grid-column: 1;
     grid-row: auto;

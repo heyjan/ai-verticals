@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRenderLoop } from '@tresjs/core'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import type { Group } from 'three'
 
 interface CategoryDatum {
@@ -16,28 +15,15 @@ const emit = defineEmits<{
   (e: 'hover', payload: { category: string; count: number } | null): void
 }>()
 
-// ── Color palette ───────────────────────────────────────────
 const PALETTE = [
-  '#00ffff', // cyan
-  '#4466ff', // blue
-  '#8844ff', // purple
-  '#00ff88', // green
-  '#ff44aa', // pink
-  '#ffaa00', // amber
-  '#ff4444', // red
-  '#44ffaa', // teal
-  '#ff8844', // orange
-  '#aa44ff', // violet
-  '#44aaff', // sky
-  '#ffff44', // yellow
-  '#ff44ff', // magenta
-  '#88ff44', // lime
+  '#00ffff', '#4466ff', '#8844ff', '#00ff88', '#ff44aa',
+  '#ffaa00', '#ff4444', '#44ffaa', '#ff8844', '#aa44ff',
+  '#44aaff', '#ffff44', '#ff44ff', '#88ff44',
 ]
 
-// ── Ring segments ───────────────────────────────────────────
 const INNER_RADIUS = 2.0
 const OUTER_RADIUS = 3.0
-const GAP = 0.03 // gap between segments in radians
+const GAP = 0.03
 
 const total = computed(() =>
   props.data.reduce((sum, d) => sum + d.count, 0) || 1,
@@ -61,17 +47,28 @@ const segments = computed(() => {
   })
 })
 
-// ── Animation ───────────────────────────────────────────────
 const ringGroupRef = ref<Group | null>(null)
 
-const { onLoop } = useRenderLoop()
+let rafId = 0
+let startTime = 0
 
-onLoop(({ elapsed }) => {
-  if (!ringGroupRef.value) return
-  ringGroupRef.value.rotation.z = elapsed * 0.1
+function animate(time: number) {
+  if (!startTime) startTime = time
+  const elapsed = (time - startTime) / 1000
+  if (ringGroupRef.value) {
+    ringGroupRef.value.rotation.z = elapsed * 0.1
+  }
+  rafId = requestAnimationFrame(animate)
+}
+
+onMounted(() => {
+  rafId = requestAnimationFrame(animate)
 })
 
-// ── Hover ───────────────────────────────────────────────────
+onBeforeUnmount(() => {
+  cancelAnimationFrame(rafId)
+})
+
 const hoveredIndex = ref<number | null>(null)
 
 function onSegmentEnter(index: number, seg: typeof segments.value[0]) {
@@ -86,14 +83,13 @@ function onSegmentLeave() {
 </script>
 
 <template>
-  <!-- 3D ring chart rendered flat facing camera -->
   <TresGroup ref="ringGroupRef" :rotation="[-Math.PI / 2, 0, 0]">
     <TresMesh
       v-for="(seg, i) in segments"
       :key="seg.category"
       :position="[0, 0, hoveredIndex === i ? 0.1 : 0]"
-      @pointer-enter="() => onSegmentEnter(i, seg)"
-      @pointer-leave="onSegmentLeave"
+      @pointerenter="() => onSegmentEnter(i, seg)"
+      @pointerleave="onSegmentLeave"
     >
       <TresRingGeometry
         :args="[

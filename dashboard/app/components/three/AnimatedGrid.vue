@@ -1,20 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useLoop } from '@tresjs/core'
-import * as THREE from 'three'
+import { ref, onMounted } from 'vue'
+import type * as THREE from 'three'
 
 const gridRef = ref<THREE.GridHelper | null>(null)
 
-const { onBeforeRender } = useLoop()
-
-onBeforeRender(() => {
+onMounted(() => {
   if (gridRef.value) {
     const mat = gridRef.value.material as THREE.Material
-    if (!mat.transparent) {
-      mat.transparent = true
-      mat.opacity = 0.15
-      mat.depthWrite = false
-    }
+    mat.transparent = true
+    mat.opacity = 0.15
+    mat.depthWrite = false
   }
 })
 </script>
