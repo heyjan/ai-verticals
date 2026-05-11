@@ -7,7 +7,8 @@
     "build": "nuxt build && cp node_modules/sql.js/dist/sql-wasm.wasm .output/server/node_modules/sql.js/dist/",
     "preview": "nuxt preview",
     "generate": "nuxt generate",
-    "seed": "tsx server/database/seed.ts"
+    "seed": "tsx server/database/seed.ts",
+    "enrich": "tsx scripts/enrich-companies.ts"
   },
   "dependencies": {
     "@tresjs/cientos": "^5.7.0",
@@ -15,7 +16,9 @@
     "@tresjs/nuxt": "^5.6.0",
     "d3-geo": "^3.1.1",
     "d3-scale": "^4.0.2",
+    "dotenv": "^17.4.2",
     "nuxt": "^4.4.4",
+    "openai": "^6.37.0",
     "sql.js": "^1.12.0",
     "three": "^0.184.0",
     "topojson-client": "^3.1.0",
