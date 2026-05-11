@@ -14,6 +14,9 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   vite: {
     plugins: [tailwindcss()],
+    optimizeDeps: {
+      include: ['three', '@tresjs/core', '@tresjs/cientos'],
+    },
   },
   app: {
     head: {
