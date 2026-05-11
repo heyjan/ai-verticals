@@ -16,6 +16,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'hover', payload: { city: string; count: number; screenX: number; screenY: number } | null): void
+  (e: 'select', city: string): void
 }>()
 
 function project(lat: number, lon: number): [number, number] {
@@ -110,6 +111,10 @@ function onBarPointerLeave() {
   emit('hover', null)
 }
 
+function onBarClick(city: CityDatum) {
+  emit('select', city.city)
+}
+
 const outlineRef = ref<any>(null)
 const fillRef = ref<any>(null)
 
@@ -157,13 +162,21 @@ watchEffect(() => {
       v-for="cp in cityPositions"
       :key="cp.city.city"
     >
+      <!-- Invisible hit area (larger click/hover target) -->
       <TresMesh
         :position="[cp.x, cp.height / 2, cp.z]"
         :pointer-events="'auto'"
         @pointerenter="(e: any) => onBarPointerEnter(cp.city, e)"
         @pointermove="(e: any) => onBarPointerMove(cp.city, e)"
         @pointerleave="onBarPointerLeave"
+        @click="() => onBarClick(cp.city)"
       >
+        <TresBoxGeometry :args="[0.6, cp.height, 0.6]" />
+        <TresMeshBasicMaterial :opacity="0" :transparent="true" :depth-write="false" />
+      </TresMesh>
+
+      <!-- Visible wireframe bar -->
+      <TresMesh :position="[cp.x, cp.height / 2, cp.z]">
         <TresBoxGeometry :args="[0.2, cp.height, 0.2]" />
         <TresMeshBasicMaterial
           :color="hoveredCity === cp.city.city ? '#0055ff' : '#111111'"
@@ -171,6 +184,7 @@ watchEffect(() => {
         />
       </TresMesh>
 
+      <!-- Visible solid inner bar -->
       <TresMesh :position="[cp.x, cp.height / 2, cp.z]">
         <TresBoxGeometry :args="[0.08, cp.height, 0.08]" />
         <TresMeshBasicMaterial

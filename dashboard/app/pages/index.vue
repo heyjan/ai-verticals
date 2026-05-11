@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { overview, byCategory, byCity, byLevel, topCompanies } = useStats()
+const { overview, byCategory, byCity, byLevel, topCompanies, companyFilter } = useStats()
 
 const stats = computed(() => overview.data.value as Record<string, any> | undefined)
 const categories = computed(() => (byCategory.data.value as any[] | undefined) ?? [])
@@ -56,6 +56,49 @@ function onMapHover(payload: { city: string; count: number; screenX: number; scr
     : null
 }
 
+const selectedCity = ref<string | null>(null)
+const cityDetail = ref<any>(null)
+const cityDetailPending = ref(false)
+
+async function onCitySelect(city: string) {
+  if (selectedCity.value === city) {
+    selectedCity.value = null
+    cityDetail.value = null
+    return
+  }
+  selectedCity.value = city
+  cityDetailPending.value = true
+  try {
+    const data = await $fetch('/api/stats/city-detail', { params: { city } })
+    cityDetail.value = data
+  } catch {
+    cityDetail.value = null
+  }
+  cityDetailPending.value = false
+}
+
+function closeCityDetail() {
+  selectedCity.value = null
+  cityDetail.value = null
+}
+
+function formatSalary(n: number): string {
+  return `${Math.round(n / 1000)}k`
+}
+
+const companiesPage = ref(0)
+const companiesPerPage = 10
+const companiesPageCount = computed(() => Math.ceil(companies.value.length / companiesPerPage))
+
+function toggleCompanyFilter() {
+  companyFilter.value = companyFilter.value === 'all' ? 'us' : 'all'
+  companiesPage.value = 0
+}
+const pagedCompanies = computed(() => {
+  const start = companiesPage.value * companiesPerPage
+  return companies.value.slice(start, start + companiesPerPage)
+})
+
 function pct(value: number, max: number): string {
   return `${Math.max((value / max) * 100, 2)}%`
 }
@@ -66,14 +109,12 @@ function pct(value: number, max: number): string {
     <!-- ════════ HEADER ════════ -->
     <header class="dash-header">
       <div class="flex items-center justify-between h-full">
-        <div class="flex items-center gap-4">
-          <img src="/logo.svg" alt="ai-verticals.dev" class="h-6" />
-          <div class="h-5 w-px bg-ink-ghost" />
-          <p class="font-mono text-[9px] uppercase tracking-[0.25em] text-ink-faint">
+        <img src="/logo.png" alt="ai-verticals.dev" class="h-[90px] -ml-8 object-cover shrink-0" />
+
+        <div class="flex items-center gap-4 shrink-0">
+          <span class="font-mono text-[9px] uppercase tracking-[0.25em] text-ink-faint">
             {{ stats?.total ?? '...' }} records
-          </p>
-        </div>
-        <div class="flex items-center gap-4">
+          </span>
           <span class="status-flicker flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
             <span
               class="block h-[5px] w-[5px] rounded-full"
@@ -88,20 +129,15 @@ function pct(value: number, max: number): string {
       </div>
     </header>
 
-    <!-- ════════ SUBHEADER ════════ -->
-    <div class="dash-subheader">
-      <p class="text-[13px] leading-relaxed text-ink-light">
-        Wo wird KI in Deutschland wirklich eingesetzt? Dieses Dashboard analysiert
-        Stellenanzeigen aus verschiedenen Quellen und macht sichtbar, welche Unternehmen
-        KI-Lösungen implementieren &mdash; in welchen Städten, Branchen und Rollen.
-        Entstanden an einem langweiligen Sonntag, mittlerweile eine gepflegte Datenquelle
-        für alle, die KI-Adoption im deutschen Markt verstehen wollen.
-      </p>
-    </div>
-
     <!-- ════════ STATS COLUMN ════════ -->
     <aside class="dash-stats panel reg-marks p-5">
       <h2 class="panel-header">SYS.overview</h2>
+
+      <p class="text-[10px] leading-relaxed text-ink-light mb-4">
+        Wo wird KI in Deutschland wirklich eingesetzt? Dieses Dashboard analysiert
+        Stellenanzeigen und macht sichtbar, welche Unternehmen KI-Lösungen implementieren
+        &mdash; in welchen Städten, Branchen und Rollen.
+      </p>
 
       <template v-if="stats">
         <div class="grid grid-cols-2 gap-x-4 gap-y-5">
@@ -123,26 +159,6 @@ function pct(value: number, max: number): string {
           </div>
         </div>
 
-        <!-- Source indicators -->
-        <div class="mt-6 border-t border-ink-ghost/50 pt-4">
-          <p class="font-mono text-[8px] uppercase tracking-[0.2em] text-ink-faint mb-3">Data sources</p>
-          <div class="space-y-2">
-            <div
-              v-for="(count, source) in stats.sources"
-              :key="source"
-              class="flex items-center gap-3"
-            >
-              <span class="font-mono text-[9px] uppercase tracking-[0.15em] text-ink-light w-16">{{ source }}</span>
-              <div class="flex-1 data-bar-track">
-                <div
-                  class="data-bar-fill"
-                  :style="{ width: `${(count as number / stats.total) * 100}%` }"
-                />
-              </div>
-              <span class="font-mono text-[10px] tabular-nums text-ink-light w-8 text-right">{{ count }}</span>
-            </div>
-          </div>
-        </div>
       </template>
 
       <template v-else>
@@ -163,11 +179,11 @@ function pct(value: number, max: number): string {
       <ClientOnly>
         <SceneSetup>
           <AnimatedGrid />
-          <FloatingParticles />
           <GermanyMap
             v-if="mappableCities.length"
             :city-data="mappableCities"
             @hover="onMapHover"
+            @select="onCitySelect"
           />
         </SceneSetup>
         <template #fallback>
@@ -197,6 +213,86 @@ function pct(value: number, max: number): string {
           </div>
         </Transition>
       </Teleport>
+
+      <!-- City detail panel -->
+      <Transition
+        enter-active-class="transition-all duration-200 ease-out"
+        leave-active-class="transition-all duration-150 ease-in"
+        enter-from-class="opacity-0 translate-x-4"
+        leave-to-class="opacity-0 translate-x-4"
+      >
+        <div
+          v-if="selectedCity"
+          class="city-detail-panel absolute top-3 left-3 z-20 w-[280px]"
+        >
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-mono text-[11px] uppercase tracking-[0.2em] text-ink font-bold">{{ selectedCity }}</h3>
+            <button
+              class="font-mono text-[9px] text-ink-faint hover:text-ink transition-colors cursor-pointer"
+              @click="closeCityDetail"
+            >&times; close</button>
+          </div>
+
+          <template v-if="cityDetailPending">
+            <div class="animate-pulse space-y-2">
+              <div class="h-3 w-3/4 bg-surface-ruled" />
+              <div class="h-3 w-1/2 bg-surface-ruled" />
+            </div>
+          </template>
+
+          <template v-else-if="cityDetail && cityDetail.count > 0">
+            <p class="font-mono text-[8px] uppercase tracking-[0.15em] text-ink-faint mb-3">
+              {{ cityDetail.count }} jobs with salary data
+            </p>
+
+            <div class="grid grid-cols-2 gap-x-4 gap-y-3 mb-4">
+              <div>
+                <p class="font-mono text-[14px] font-bold text-ink">{{ formatSalary(cityDetail.medianLow) }}&ndash;{{ formatSalary(cityDetail.medianHigh) }}</p>
+                <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint">Median range</p>
+              </div>
+              <div>
+                <p class="font-mono text-[14px] font-bold text-ink">{{ formatSalary(cityDetail.avgLow) }}&ndash;{{ formatSalary(cityDetail.avgHigh) }}</p>
+                <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint">Average range</p>
+              </div>
+              <div>
+                <p class="font-mono text-[12px] text-ink-light">{{ formatSalary(cityDetail.min) }}</p>
+                <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint">Lowest</p>
+              </div>
+              <div>
+                <p class="font-mono text-[12px] text-ink-light">{{ formatSalary(cityDetail.max) }}</p>
+                <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint">Highest</p>
+              </div>
+            </div>
+
+            <div class="salary-distribution">
+              <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint mb-2">Distribution (EUR/year)</p>
+              <div class="space-y-[2px]">
+                <div
+                  v-for="(r, i) in cityDetail.ranges.slice(0, 20)"
+                  :key="i"
+                  class="salary-bar-row"
+                >
+                  <div
+                    class="salary-bar"
+                    :style="{
+                      left: `${(r.low / cityDetail.max) * 100}%`,
+                      width: `${((r.high - r.low) / cityDetail.max) * 100}%`,
+                    }"
+                  />
+                </div>
+              </div>
+              <div class="flex justify-between mt-1">
+                <span class="font-mono text-[7px] text-ink-ghost">0k</span>
+                <span class="font-mono text-[7px] text-ink-ghost">{{ formatSalary(cityDetail.max) }}</span>
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
+            <p class="font-mono text-[9px] text-ink-faint">No salary data available for this city.</p>
+          </template>
+        </div>
+      </Transition>
 
       <!-- Viewport labels -->
       <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
@@ -317,13 +413,22 @@ function pct(value: number, max: number): string {
 
     <!-- ════════ TOP COMPANIES ════════ -->
     <section class="dash-companies panel reg-marks overflow-y-auto p-5">
-      <h2 class="panel-header">ORG.companies</h2>
+      <div class="flex items-center justify-between mb-0">
+        <h2 class="panel-header mb-0!">ORG.companies</h2>
+        <button
+          class="company-filter-toggle font-mono text-[8px] uppercase tracking-[0.15em] px-2 py-0.5 rounded cursor-pointer transition-colors"
+          :class="companyFilter === 'us' ? 'bg-accent text-white' : 'text-ink-faint hover:text-ink border border-ink-ghost/40'"
+          @click="toggleCompanyFilter"
+        >
+          {{ companyFilter === 'us' ? 'US$' : 'ALL' }}
+        </button>
+      </div>
 
       <template v-if="companies.length">
         <table class="w-full">
           <tbody>
             <tr
-              v-for="(company, idx) in companies.slice(0, 12)"
+              v-for="(company, idx) in pagedCompanies"
               :key="company.company"
               class="stagger-item group border-b border-ink-ghost/20 last:border-0"
               :style="{ animationDelay: `${0.04 * idx}s` }"
@@ -331,14 +436,18 @@ function pct(value: number, max: number): string {
               <td class="py-1.5 pr-2 align-top">
                 <span
                   class="font-mono text-[8px] tabular-nums"
-                  :class="idx < 3 ? 'text-accent font-bold' : 'text-ink-ghost'"
+                  :class="companiesPage * companiesPerPage + idx < 3 ? 'text-accent font-bold' : 'text-ink-ghost'"
                 >
-                  {{ String(idx + 1).padStart(2, '0') }}
+                  {{ String(companiesPage * companiesPerPage + idx + 1).padStart(2, '0') }}
                 </span>
               </td>
               <td class="py-1.5 align-top">
-                <span class="text-[11px] text-ink-light group-hover:text-ink transition-colors block truncate max-w-[160px]">
+                <span class="text-[11px] text-ink-light group-hover:text-ink transition-colors inline-flex items-center gap-1.5 truncate max-w-[280px]">
                   {{ company.company }}
+                  <svg class="w-3 h-3 text-ink-ghost group-hover:text-ink-faint transition-colors shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="8" cy="8" r="6.5" />
+                    <path d="M8 7v4M8 5.5v0" stroke-linecap="round" />
+                  </svg>
                 </span>
               </td>
               <td class="py-1.5 pl-2 text-right align-top">
@@ -347,6 +456,22 @@ function pct(value: number, max: number): string {
             </tr>
           </tbody>
         </table>
+
+        <div v-if="companiesPageCount > 1" class="flex items-center justify-between mt-3 pt-2 border-t border-ink-ghost/30">
+          <button
+            class="font-mono text-[8px] uppercase tracking-[0.15em] text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+            :disabled="companiesPage === 0"
+            @click="companiesPage--"
+          >&larr; prev</button>
+          <span class="font-mono text-[8px] tabular-nums text-ink-ghost">
+            {{ companiesPage + 1 }} / {{ companiesPageCount }}
+          </span>
+          <button
+            class="font-mono text-[8px] uppercase tracking-[0.15em] text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+            :disabled="companiesPage >= companiesPageCount - 1"
+            @click="companiesPage++"
+          >next &rarr;</button>
+        </div>
       </template>
     </section>
 
@@ -372,7 +497,7 @@ function pct(value: number, max: number): string {
 .dash {
   display: grid;
   grid-template-columns: 220px 1fr 260px;
-  grid-template-rows: 60px auto minmax(450px, 1fr) auto auto;
+  grid-template-rows: 90px minmax(450px, 1fr) auto auto;
   gap: 6px;
   padding: 0 16px;
   width: 100vw;
@@ -386,25 +511,12 @@ function pct(value: number, max: number): string {
   margin: 0 -16px;
   padding: 0 32px;
 }
-.dash-subheader {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  display: flex;
-  align-items: center;
-  background: #fff;
-  margin: 0 -16px;
-  padding: 0 32px;
-  max-width: none;
-}
-.dash-subheader > p {
-  max-width: 720px;
-}
-.dash-stats      { grid-column: 1; grid-row: 3; }
-.dash-viewport   { grid-column: 2; grid-row: 3; }
-.dash-categories { grid-column: 3; grid-row: 3; }
-.dash-cities     { grid-column: 1; grid-row: 4; }
-.dash-levels     { grid-column: 2; grid-row: 4; }
-.dash-companies  { grid-column: 3; grid-row: 4; }
+.dash-stats      { grid-column: 1; grid-row: 2; }
+.dash-viewport   { grid-column: 2; grid-row: 2; }
+.dash-categories { grid-column: 3; grid-row: 2; }
+.dash-cities     { grid-column: 1; grid-row: 3; }
+.dash-companies  { grid-column: 2; grid-row: 3; }
+.dash-levels     { grid-column: 3; grid-row: 3; }
 .dash-footer {
   grid-column: 1 / -1;
   margin: 0 -16px;
@@ -413,21 +525,43 @@ function pct(value: number, max: number): string {
   border-top: 1px solid var(--color-ink-ghost);
 }
 
+.city-detail-panel {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--color-ink-ghost);
+  border-radius: 4px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+.salary-bar-row {
+  position: relative;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 1px;
+}
+.salary-bar {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--color-accent);
+  opacity: 0.6;
+  border-radius: 1px;
+}
+
 @media (max-width: 1100px) {
   .dash {
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: 60px auto auto auto auto auto auto;
+    grid-template-rows: auto auto auto auto auto auto;
     height: auto;
   }
   .dash-header     { grid-column: 1 / -1; grid-row: 1; }
-  .dash-subheader  { grid-column: 1 / -1; grid-row: 2; }
-  .dash-stats      { grid-column: 1; grid-row: 3; }
-  .dash-categories { grid-column: 2; grid-row: 3; }
-  .dash-viewport   { grid-column: 1 / -1; grid-row: 4; min-height: 400px; }
-  .dash-cities     { grid-column: 1; grid-row: 5; }
-  .dash-levels     { grid-column: 2; grid-row: 5; }
-  .dash-companies  { grid-column: 1 / -1; grid-row: 6; }
-  .dash-footer     { grid-column: 1 / -1; grid-row: 7; }
+  .dash-stats      { grid-column: 1; grid-row: 2; }
+  .dash-categories { grid-column: 2; grid-row: 2; }
+  .dash-viewport   { grid-column: 1 / -1; grid-row: 3; min-height: 400px; }
+  .dash-cities     { grid-column: 1; grid-row: 4; }
+  .dash-companies  { grid-column: 2; grid-row: 4; }
+  .dash-levels     { grid-column: 1 / -1; grid-row: 5; }
+  .dash-footer     { grid-column: 1 / -1; grid-row: 6; }
 }
 
 @media (max-width: 640px) {
@@ -443,7 +577,7 @@ function pct(value: number, max: number): string {
     margin: 0 -10px;
     padding: 0 20px;
   }
-  .dash-header, .dash-subheader, .dash-stats, .dash-viewport, .dash-categories,
+  .dash-header, .dash-stats, .dash-viewport, .dash-categories,
   .dash-cities, .dash-levels, .dash-companies, .dash-footer {
     grid-column: 1;
     grid-row: auto;
