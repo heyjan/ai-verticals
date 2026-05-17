@@ -6,8 +6,8 @@
 
   --color-ink: #1a1a2e;
   --color-ink-light: #3d3d5c;
-  --color-ink-faint: #9999b3;
-  --color-ink-ghost: #ccccda;
+  --color-ink-faint: #6b6b85;
+  --color-ink-ghost: #9a9ab0;
 
   --color-surface: #fafaf8;
   --color-surface-warm: #f4f3f0;
@@ -44,7 +44,7 @@ body {
 
 .panel-header {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -68,7 +68,7 @@ body {
 
 .stat-value {
   font-family: var(--font-mono);
-  font-size: 28px;
+  font-size: 28.5px;
   font-weight: 700;
   color: var(--color-ink);
   letter-spacing: -0.02em;
@@ -77,7 +77,7 @@ body {
 
 .stat-label {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 9.5px;
   color: var(--color-ink-faint);
   text-transform: uppercase;
   letter-spacing: 0.15em;
@@ -231,7 +231,7 @@ body {
   top: -2px;
   right: -2px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--color-ink-faint);
   line-height: 1;
   pointer-events: none;

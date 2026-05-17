@@ -120,6 +120,10 @@ export default defineEventHandler(async (event) => {
     'SELECT DISTINCT category FROM jobs WHERE company = :company ORDER BY category',
   )
 
+  const descStmt = db.prepare(
+    'SELECT description FROM company_descriptions WHERE company = :company',
+  )
+
   const result = companies.map(({ company, count }) => {
     stmt.bind({ ':company': company })
     const categories: string[] = []
@@ -127,10 +131,19 @@ export default defineEventHandler(async (event) => {
       categories.push(stmt.get()[0] as string)
     }
     stmt.reset()
-    return { company, count, categories }
+
+    let description: string | null = null
+    descStmt.bind({ ':company': company })
+    if (descStmt.step()) {
+      description = descStmt.get()[0] as string
+    }
+    descStmt.reset()
+
+    return { company, count, categories, description }
   })
 
   stmt.free()
+  descStmt.free()
 
   return result
 })

@@ -86,6 +86,21 @@ function formatSalary(n: number): string {
   return `${Math.round(n / 1000)}k`
 }
 
+const companyTooltip = ref<{ text: string; x: number; y: number } | null>(null)
+
+function showCompanyTooltip(e: MouseEvent, description: string) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  companyTooltip.value = {
+    text: description,
+    x: rect.left + rect.width / 2,
+    y: rect.top,
+  }
+}
+
+function hideCompanyTooltip() {
+  companyTooltip.value = null
+}
+
 const companiesPage = ref(0)
 const companiesPerPage = 10
 const companiesPageCount = computed(() => Math.ceil(companies.value.length / companiesPerPage))
@@ -108,21 +123,21 @@ function pct(value: number, max: number): string {
   <div class="dash blueprint-grid">
     <!-- ════════ HEADER ════════ -->
     <header class="dash-header">
-      <div class="flex items-center justify-between h-full">
-        <img src="/logo.png" alt="ai-verticals.dev" class="h-[90px] -ml-8 object-cover shrink-0" />
+      <div class="header-inner">
+        <img src="/logo.png" alt="ai-verticals.dev" class="header-logo" />
 
-        <div class="flex items-center gap-4 shrink-0">
-          <span class="font-mono text-[9px] uppercase tracking-[0.25em] text-ink-faint">
+        <div class="header-meta">
+          <span class="font-mono text-[9.5px] uppercase tracking-[0.25em] text-ink-faint">
             {{ stats?.total ?? '...' }} records
           </span>
-          <span class="status-flicker flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">
+          <span class="status-flicker flex items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink-faint">
             <span
               class="block h-[5px] w-[5px] rounded-full"
               :class="isLoading ? 'animate-pulse bg-amber-500' : 'bg-emerald-500'"
             />
             {{ isLoading ? 'SYNCING' : 'ACTIVE' }}
           </span>
-          <span v-if="lastUpdated" class="font-mono text-[9px] tracking-[0.15em] text-ink-ghost">
+          <span v-if="lastUpdated" class="font-mono text-[9.5px] tracking-[0.15em] text-ink-ghost hidden sm:inline">
             Last updated {{ lastUpdated }}
           </span>
         </div>
@@ -133,7 +148,7 @@ function pct(value: number, max: number): string {
     <aside class="dash-stats panel reg-marks p-5">
       <h2 class="panel-header">SYS.overview</h2>
 
-      <p class="text-[10px] leading-relaxed text-ink-light mb-4">
+      <p class="text-[10.5px] leading-relaxed text-ink-light mb-4">
         Wo wird KI in Deutschland wirklich eingesetzt? Dieses Dashboard analysiert
         Stellenanzeigen und macht sichtbar, welche Unternehmen KI-Lösungen implementieren
         &mdash; in welchen Städten, Branchen und Rollen.
@@ -188,7 +203,7 @@ function pct(value: number, max: number): string {
         </SceneSetup>
         <template #fallback>
           <div class="flex h-full items-center justify-center">
-            <span class="font-mono text-[10px] uppercase tracking-[0.3em] text-ink-faint animate-pulse">
+            <span class="font-mono text-[10.5px] uppercase tracking-[0.3em] text-ink-faint animate-pulse">
               Initialising viewport
             </span>
           </div>
@@ -208,8 +223,8 @@ function pct(value: number, max: number): string {
             class="tooltip-panel fixed z-50"
             :style="{ left: `${tooltip.x + 16}px`, top: `${tooltip.y - 20}px` }"
           >
-            <p class="font-mono text-[9px] uppercase tracking-[0.2em] text-ink-faint">{{ tooltip.city }}</p>
-            <p class="font-mono text-[18px] font-bold text-ink mt-0.5">{{ tooltip.count }}<span class="text-[9px] font-normal text-ink-faint ml-1">jobs</span></p>
+            <p class="font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink-faint">{{ tooltip.city }}</p>
+            <p class="font-mono text-[18.5px] font-bold text-ink mt-0.5">{{ tooltip.count }}<span class="text-[9.5px] font-normal text-ink-faint ml-1">jobs</span></p>
           </div>
         </Transition>
       </Teleport>
@@ -226,9 +241,9 @@ function pct(value: number, max: number): string {
           class="city-detail-panel absolute top-3 left-3 z-20 w-[280px]"
         >
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-mono text-[11px] uppercase tracking-[0.2em] text-ink font-bold">{{ selectedCity }}</h3>
+            <h3 class="font-mono text-[11.5px] uppercase tracking-[0.2em] text-ink font-bold">{{ selectedCity }}</h3>
             <button
-              class="font-mono text-[9px] text-ink-faint hover:text-ink transition-colors cursor-pointer"
+              class="font-mono text-[9.5px] text-ink-faint hover:text-ink transition-colors cursor-pointer"
               @click="closeCityDetail"
             >&times; close</button>
           </div>
@@ -241,31 +256,31 @@ function pct(value: number, max: number): string {
           </template>
 
           <template v-else-if="cityDetail && cityDetail.count > 0">
-            <p class="font-mono text-[8px] uppercase tracking-[0.15em] text-ink-faint mb-3">
+            <p class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-faint mb-3">
               {{ cityDetail.count }} jobs with salary data
             </p>
 
             <div class="grid grid-cols-2 gap-x-4 gap-y-3 mb-4">
               <div>
-                <p class="font-mono text-[14px] font-bold text-ink">{{ formatSalary(cityDetail.medianLow) }}&ndash;{{ formatSalary(cityDetail.medianHigh) }}</p>
-                <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint">Median range</p>
+                <p class="font-mono text-[14.5px] font-bold text-ink">{{ formatSalary(cityDetail.medianLow) }}&ndash;{{ formatSalary(cityDetail.medianHigh) }}</p>
+                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Median range</p>
               </div>
               <div>
-                <p class="font-mono text-[14px] font-bold text-ink">{{ formatSalary(cityDetail.avgLow) }}&ndash;{{ formatSalary(cityDetail.avgHigh) }}</p>
-                <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint">Average range</p>
+                <p class="font-mono text-[14.5px] font-bold text-ink">{{ formatSalary(cityDetail.avgLow) }}&ndash;{{ formatSalary(cityDetail.avgHigh) }}</p>
+                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Average range</p>
               </div>
               <div>
-                <p class="font-mono text-[12px] text-ink-light">{{ formatSalary(cityDetail.min) }}</p>
-                <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint">Lowest</p>
+                <p class="font-mono text-[12.5px] text-ink-light">{{ formatSalary(cityDetail.min) }}</p>
+                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Lowest</p>
               </div>
               <div>
-                <p class="font-mono text-[12px] text-ink-light">{{ formatSalary(cityDetail.max) }}</p>
-                <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint">Highest</p>
+                <p class="font-mono text-[12.5px] text-ink-light">{{ formatSalary(cityDetail.max) }}</p>
+                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Highest</p>
               </div>
             </div>
 
             <div class="salary-distribution">
-              <p class="font-mono text-[7px] uppercase tracking-[0.15em] text-ink-faint mb-2">Distribution (EUR/year)</p>
+              <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint mb-2">Distribution (EUR/year)</p>
               <div class="space-y-[2px]">
                 <div
                   v-for="(r, i) in cityDetail.ranges.slice(0, 20)"
@@ -282,26 +297,26 @@ function pct(value: number, max: number): string {
                 </div>
               </div>
               <div class="flex justify-between mt-1">
-                <span class="font-mono text-[7px] text-ink-ghost">0k</span>
-                <span class="font-mono text-[7px] text-ink-ghost">{{ formatSalary(cityDetail.max) }}</span>
+                <span class="font-mono text-[7.5px] text-ink-ghost">0k</span>
+                <span class="font-mono text-[7.5px] text-ink-ghost">{{ formatSalary(cityDetail.max) }}</span>
               </div>
             </div>
           </template>
 
           <template v-else>
-            <p class="font-mono text-[9px] text-ink-faint">No salary data available for this city.</p>
+            <p class="font-mono text-[9.5px] text-ink-faint">No salary data available for this city.</p>
           </template>
         </div>
       </Transition>
 
       <!-- Viewport labels -->
       <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
-        <p class="font-mono text-[7px] uppercase tracking-[0.3em] text-ink-faint/40">
+        <p class="font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
           geo.distribution // perspective
         </p>
       </div>
       <div class="absolute top-2 right-3 z-10 pointer-events-none">
-        <p class="status-flicker font-mono text-[7px] uppercase tracking-[0.3em] text-ink-faint/40">
+        <p class="status-flicker font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
           viewport.3d
         </p>
       </div>
@@ -320,8 +335,8 @@ function pct(value: number, max: number): string {
             :style="{ animationDelay: `${0.05 * idx}s` }"
           >
             <div class="flex items-baseline justify-between mb-1">
-              <span class="text-[11px] text-ink-light group-hover:text-ink transition-colors">{{ cat.category }}</span>
-              <span class="font-mono text-[10px] tabular-nums text-ink-faint group-hover:text-accent transition-colors">
+              <span class="text-[11.5px] text-ink-light group-hover:text-ink transition-colors">{{ cat.category }}</span>
+              <span class="font-mono text-[10.5px] tabular-nums text-ink-faint group-hover:text-accent transition-colors">
                 {{ cat.count }}
               </span>
             </div>
@@ -355,15 +370,15 @@ function pct(value: number, max: number): string {
             class="stagger-item flex items-center gap-2 group"
             :style="{ animationDelay: `${0.05 * idx}s` }"
           >
-            <span class="font-mono text-[8px] tabular-nums text-ink-ghost w-4 text-right shrink-0">
+            <span class="font-mono text-[8.5px] tabular-nums text-ink-ghost w-4 text-right shrink-0">
               {{ String(idx + 1).padStart(2, '0') }}
             </span>
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline justify-between mb-0.5">
-                <span class="text-[11px] text-ink-light truncate group-hover:text-ink transition-colors">
+                <span class="text-[11.5px] text-ink-light truncate group-hover:text-ink transition-colors">
                   {{ city.city || 'Remote' }}
                 </span>
-                <span class="font-mono text-[10px] tabular-nums text-ink-faint ml-2 shrink-0">{{ city.count }}</span>
+                <span class="font-mono text-[10.5px] tabular-nums text-ink-faint ml-2 shrink-0">{{ city.count }}</span>
               </div>
               <div class="data-bar-track">
                 <div
@@ -390,8 +405,8 @@ function pct(value: number, max: number): string {
             :style="{ animationDelay: `${0.05 * idx}s` }"
           >
             <div class="flex items-baseline justify-between mb-1">
-              <span class="text-[11px] text-ink-light group-hover:text-ink transition-colors">{{ level.level }}</span>
-              <span class="font-mono text-[10px] tabular-nums text-ink-faint group-hover:text-accent transition-colors">{{ level.count }}</span>
+              <span class="text-[11.5px] text-ink-light group-hover:text-ink transition-colors">{{ level.level }}</span>
+              <span class="font-mono text-[10.5px] tabular-nums text-ink-faint group-hover:text-accent transition-colors">{{ level.count }}</span>
             </div>
             <div class="data-bar-track">
               <div
@@ -404,8 +419,8 @@ function pct(value: number, max: number): string {
 
         <div v-if="unspecifiedCount" class="mt-4 pt-3 border-t border-ink-ghost/30">
           <div class="flex items-baseline justify-between">
-            <span class="font-mono text-[8px] uppercase tracking-[0.15em] text-ink-ghost">Unspecified</span>
-            <span class="font-mono text-[9px] tabular-nums text-ink-ghost">{{ unspecifiedCount }}</span>
+            <span class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-ghost">Unspecified</span>
+            <span class="font-mono text-[9.5px] tabular-nums text-ink-ghost">{{ unspecifiedCount }}</span>
           </div>
         </div>
       </template>
@@ -416,7 +431,7 @@ function pct(value: number, max: number): string {
       <div class="flex items-center justify-between mb-0">
         <h2 class="panel-header mb-0!">ORG.companies</h2>
         <button
-          class="company-filter-toggle font-mono text-[8px] uppercase tracking-[0.15em] px-2 py-0.5 rounded cursor-pointer transition-colors"
+          class="company-filter-toggle font-mono text-[8.5px] uppercase tracking-[0.15em] px-2 py-0.5 rounded cursor-pointer transition-colors"
           :class="companyFilter === 'us' ? 'bg-accent text-white' : 'text-ink-faint hover:text-ink border border-ink-ghost/40'"
           @click="toggleCompanyFilter"
         >
@@ -435,23 +450,34 @@ function pct(value: number, max: number): string {
             >
               <td class="py-1.5 pr-2 align-top">
                 <span
-                  class="font-mono text-[8px] tabular-nums"
+                  class="font-mono text-[8.5px] tabular-nums"
                   :class="companiesPage * companiesPerPage + idx < 3 ? 'text-accent font-bold' : 'text-ink-ghost'"
                 >
                   {{ String(companiesPage * companiesPerPage + idx + 1).padStart(2, '0') }}
                 </span>
               </td>
               <td class="py-1.5 align-top">
-                <span class="text-[11px] text-ink-light group-hover:text-ink transition-colors inline-flex items-center gap-1.5 truncate max-w-[280px]">
+                <span class="text-[11.5px] text-ink-light group-hover:text-ink transition-colors inline-flex items-center gap-1.5 truncate max-w-[280px]">
                   {{ company.company }}
-                  <svg class="w-3 h-3 text-ink-ghost group-hover:text-ink-faint transition-colors shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <span
+                    v-if="company.description"
+                    class="shrink-0 cursor-help"
+                    @mouseenter="showCompanyTooltip($event, company.description)"
+                    @mouseleave="hideCompanyTooltip"
+                  >
+                    <svg class="w-3 h-3 text-ink-ghost group-hover:text-ink-faint transition-colors" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <circle cx="8" cy="8" r="6.5" />
+                      <path d="M8 7v4M8 5.5v0" stroke-linecap="round" />
+                    </svg>
+                  </span>
+                  <svg v-else class="w-3 h-3 text-ink-ghost/30 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                     <circle cx="8" cy="8" r="6.5" />
                     <path d="M8 7v4M8 5.5v0" stroke-linecap="round" />
                   </svg>
                 </span>
               </td>
               <td class="py-1.5 pl-2 text-right align-top">
-                <span class="font-mono text-[10px] tabular-nums text-ink-faint">{{ company.count }}</span>
+                <span class="font-mono text-[10.5px] tabular-nums text-ink-faint">{{ company.count }}</span>
               </td>
             </tr>
           </tbody>
@@ -459,15 +485,15 @@ function pct(value: number, max: number): string {
 
         <div v-if="companiesPageCount > 1" class="flex items-center justify-between mt-3 pt-2 border-t border-ink-ghost/30">
           <button
-            class="font-mono text-[8px] uppercase tracking-[0.15em] text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+            class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
             :disabled="companiesPage === 0"
             @click="companiesPage--"
           >&larr; prev</button>
-          <span class="font-mono text-[8px] tabular-nums text-ink-ghost">
+          <span class="font-mono text-[8.5px] tabular-nums text-ink-ghost">
             {{ companiesPage + 1 }} / {{ companiesPageCount }}
           </span>
           <button
-            class="font-mono text-[8px] uppercase tracking-[0.15em] text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+            class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
             :disabled="companiesPage >= companiesPageCount - 1"
             @click="companiesPage++"
           >next &rarr;</button>
@@ -477,7 +503,7 @@ function pct(value: number, max: number): string {
 
     <!-- ════════ FOOTER ════════ -->
     <footer class="dash-footer flex items-center justify-between">
-      <span class="font-mono text-[9px] tracking-[0.1em] text-ink-faint">
+      <span class="font-mono text-[9.5px] tracking-[0.1em] text-ink-faint">
         built with &lt;3 by
         <a href="https://heyjan.de" target="_blank" rel="noopener" class="text-ink-light hover:text-accent transition-colors">heyjan.de</a>
       </span>
@@ -491,6 +517,16 @@ function pct(value: number, max: number): string {
       </div>
     </footer>
   </div>
+
+  <Teleport to="body">
+    <div
+      v-if="companyTooltip"
+      class="company-tooltip"
+      :style="{ left: companyTooltip.x + 'px', top: companyTooltip.y + 'px' }"
+    >
+      {{ companyTooltip.text }}
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -510,6 +546,24 @@ function pct(value: number, max: number): string {
   border-bottom: 1px solid var(--color-ink-ghost);
   margin: 0 -16px;
   padding: 0 32px;
+}
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+}
+.header-logo {
+  height: 100%;
+  object-fit: contain;
+  object-position: left;
+  flex-shrink: 0;
+}
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
 }
 .dash-stats      { grid-column: 1; grid-row: 2; }
 .dash-viewport   { grid-column: 2; grid-row: 2; }
@@ -571,7 +625,19 @@ function pct(value: number, max: number): string {
   }
   .dash-header {
     margin: 0 -10px;
-    padding: 0 20px;
+    padding: 8px 12px;
+    height: auto !important;
+  }
+  .header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .header-logo {
+    height: 36px;
+  }
+  .header-meta {
+    gap: 0.5rem;
   }
   .dash-footer {
     margin: 0 -10px;
@@ -583,5 +649,32 @@ function pct(value: number, max: number): string {
     grid-row: auto;
   }
   .dash-viewport { min-height: 300px; }
+}
+</style>
+
+<style>
+.company-tooltip {
+  position: fixed;
+  transform: translateX(-50%) translateY(calc(-100% - 10px));
+  width: 260px;
+  padding: 10px 12px;
+  background: #1a1a1a;
+  color: #e5e5e5;
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  pointer-events: none;
+}
+.company-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1a1a1a;
 }
 </style>

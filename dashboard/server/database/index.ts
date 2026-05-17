@@ -84,6 +84,15 @@ async function initializeDb(): Promise<Database> {
   db.run('CREATE INDEX IF NOT EXISTS idx_jobs_city ON jobs (city);')
   db.run('CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs (company);')
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS company_descriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company TEXT NOT NULL UNIQUE,
+      description TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+
   dbInstance = db
   return db
 }
