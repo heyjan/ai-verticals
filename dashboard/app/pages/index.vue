@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { overview, byCategory, byCity, byLevel, topCompanies, companyFilter } = useStats()
+const { overview, byCategory, byCity, byLevel, topCompanies, companyFilter, knowledgeGraph } = useStats()
 
 const stats = computed(() => overview.data.value as Record<string, any> | undefined)
 const categories = computed(() => (byCategory.data.value as any[] | undefined) ?? [])
@@ -16,6 +16,26 @@ const lastUpdated = computed(() => {
   if (!iso) return null
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 })
+
+/**
+ * Format an ISO timestamp as a short relative-ish string:
+ *   - same day → "16:21"
+ *   - yesterday → "yesterday · 14:33"
+ *   - older → "May 13"
+ * Matches the dashboard's monospace small-caps register.
+ */
+function formatScrapeAt(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const now = new Date()
+  const sameDay = d.toDateString() === now.toDateString()
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  const isYesterday = d.toDateString() === yesterday.toDateString()
+  if (sameDay) return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  if (isYesterday) return `yesterday · ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+}
 
 const maxCategoryCount = computed(() => {
   if (!categories.value.length) return 1
@@ -53,6 +73,56 @@ const tooltip = ref<{ city: string; count: number; x: number; y: number } | null
 function onMapHover(payload: { city: string; count: number; screenX: number; screenY: number } | null) {
   tooltip.value = payload
     ? { city: payload.city, count: payload.count, x: payload.screenX, y: payload.screenY }
+    : null
+}
+
+type ViewportMode = 'map' | 'graph'
+const viewportMode = ref<ViewportMode>('map')
+const graphData = computed(() => {
+  const data = knowledgeGraph.data.value as { nodes: any[]; edges: any[] } | undefined
+  return data && Array.isArray(data.nodes) ? data : { nodes: [], edges: [] }
+})
+
+// ── Fullscreen: take the viewport panel to the full screen via the
+// Fullscreen API. Works for both map (TresJS canvas) and graph (SVG)
+// because they're both children of the same panel element. Escape exits
+// natively; we listen to `fullscreenchange` so the button stays in sync.
+const viewportRef = ref<HTMLElement | null>(null)
+const isFullscreen = ref(false)
+
+function toggleFullscreen() {
+  if (!viewportRef.value) return
+  if (!document.fullscreenElement) {
+    viewportRef.value.requestFullscreen?.().catch(() => {
+      // Some browsers reject without a user gesture in the right frame;
+      // not much we can do here besides ignore.
+    })
+  } else {
+    document.exitFullscreen?.().catch(() => {})
+  }
+}
+
+function onFullscreenChange() {
+  isFullscreen.value = document.fullscreenElement === viewportRef.value
+}
+
+// Guard <Teleport> against SSR — the target div doesn't exist in the
+// SSR HTML pass; we only enable teleporting after the client mounts.
+const isMounted = ref(false)
+onMounted(() => {
+  isMounted.value = true
+  document.addEventListener('fullscreenchange', onFullscreenChange)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+})
+
+const graphTooltip = ref<{ label: string; count: number; level: number; x: number; y: number } | null>(null)
+function onGraphHover(
+  payload: { label: string; count: number; level: number; screenX: number; screenY: number } | null,
+) {
+  graphTooltip.value = payload
+    ? { label: payload.label, count: payload.count, level: payload.level, x: payload.screenX, y: payload.screenY }
     : null
 }
 
@@ -174,6 +244,26 @@ function pct(value: number, max: number): string {
           </div>
         </div>
 
+        <!-- Daily scrape activity. Always visible so the layout stays
+             stable; "—" when there's been no scrape today. -->
+        <div class="scrape-today stagger-item" style="animation-delay: 0.5s">
+          <p class="scrape-today__header">SCRAPE.today</p>
+          <div class="scrape-today__metrics">
+            <div class="scrape-today__metric scrape-today__metric--primary">
+              <span class="scrape-today__sign">+</span>
+              <span class="scrape-today__count">{{ (stats.newToday ?? 0).toLocaleString('de-DE') }}</span>
+              <span class="scrape-today__unit">new</span>
+            </div>
+            <div class="scrape-today__metric">
+              <span class="scrape-today__count">{{ (stats.updatedToday ?? 0).toLocaleString('de-DE') }}</span>
+              <span class="scrape-today__unit">updated</span>
+            </div>
+          </div>
+          <p class="scrape-today__footer">
+            <span class="scrape-today__footer-label">Last scrape</span>
+            <span class="scrape-today__footer-value">{{ formatScrapeAt(stats.lastScrapeAt ?? null) }}</span>
+          </p>
+        </div>
       </template>
 
       <template v-else>
@@ -186,13 +276,60 @@ function pct(value: number, max: number): string {
       </template>
     </aside>
 
-    <!-- ════════ 3D VIEWPORT ════════ -->
-    <section class="dash-viewport panel reg-marks relative overflow-hidden p-0">
+    <!-- ════════ VIEWPORT ════════ -->
+    <section
+      ref="viewportRef"
+      class="dash-viewport panel reg-marks relative overflow-hidden p-0"
+      :class="{ 'dash-viewport--fullscreen': isFullscreen }"
+    >
       <!-- Registration marks inner element for all 4 corners -->
       <div class="reg-marks-full absolute inset-0 pointer-events-none z-10" />
 
+      <!-- Tooltip teleport target. Lives inside the viewport panel so it's
+           a descendant of the fullscreen element when fullscreen is active
+           (Teleport-to-body would render outside the fullscreen tree and
+           the OS hides anything outside that subtree). -->
+      <div id="viewport-overlay-root" class="viewport-overlay-root" />
+
+      <!-- Top-right toolbar: fullscreen toggle + mode toggle -->
+      <div class="absolute top-3 right-3 z-20 flex items-center gap-2">
+        <button
+          class="viewport-fs-btn"
+          :aria-label="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+          :title="isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'"
+          @click="toggleFullscreen"
+        >
+          <svg v-if="!isFullscreen" viewBox="0 0 16 16" class="viewport-fs-icon" aria-hidden="true">
+            <!-- Four corner brackets — expand icon -->
+            <path d="M2 5V2h3" />
+            <path d="M11 2h3v3" />
+            <path d="M14 11v3h-3" />
+            <path d="M5 14H2v-3" />
+          </svg>
+          <svg v-else viewBox="0 0 16 16" class="viewport-fs-icon" aria-hidden="true">
+            <!-- Inward corner brackets — collapse icon -->
+            <path d="M5 2v3H2" />
+            <path d="M11 5V2h3" />
+            <path d="M14 11h-3v3" />
+            <path d="M2 11h3v3" />
+          </svg>
+        </button>
+        <div class="flex font-mono text-[8.5px] uppercase tracking-[0.18em] viewport-toggle">
+          <button
+            class="viewport-toggle-btn"
+            :class="viewportMode === 'map' ? 'viewport-toggle-btn--active' : ''"
+            @click="viewportMode = 'map'"
+          >map</button>
+          <button
+            class="viewport-toggle-btn viewport-toggle-btn--right"
+            :class="viewportMode === 'graph' ? 'viewport-toggle-btn--active' : ''"
+            @click="viewportMode = 'graph'"
+          >graph</button>
+        </div>
+      </div>
+
       <ClientOnly>
-        <SceneSetup>
+        <SceneSetup v-if="viewportMode === 'map'" :mode="viewportMode">
           <AnimatedGrid />
           <GermanyMap
             v-if="mappableCities.length"
@@ -201,6 +338,11 @@ function pct(value: number, max: number): string {
             @select="onCitySelect"
           />
         </SceneSetup>
+        <KnowledgeGraph
+          v-else-if="graphData.nodes.length"
+          :data="graphData"
+          @hover="onGraphHover"
+        />
         <template #fallback>
           <div class="flex h-full items-center justify-center">
             <span class="font-mono text-[10.5px] uppercase tracking-[0.3em] text-ink-faint animate-pulse">
@@ -210,8 +352,23 @@ function pct(value: number, max: number): string {
         </template>
       </ClientOnly>
 
-      <!-- Map tooltip -->
-      <Teleport to="body">
+      <!-- Empty state for graph mode -->
+      <div
+        v-if="viewportMode === 'graph' && !graphData.nodes.length && !knowledgeGraph.pending.value"
+        class="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+      >
+        <div class="text-center px-4">
+          <p class="font-mono text-[10.5px] uppercase tracking-[0.32em] mb-2 text-ink-faint">— signal not found —</p>
+          <p class="font-mono text-[10.5px] tracking-[0.05em] text-ink-light">
+            run <code class="font-mono px-1.5 py-0.5 bg-surface-ruled border border-ink-ghost/50 text-ink">make discover</code>
+            then <code class="font-mono px-1.5 py-0.5 bg-surface-ruled border border-ink-ghost/50 text-ink">make classify</code>
+          </p>
+        </div>
+      </div>
+
+      <!-- Map tooltip — teleported into the viewport overlay so it's visible
+           in fullscreen mode too. -->
+      <Teleport to="#viewport-overlay-root" :disabled="!isMounted">
         <Transition
           enter-active-class="transition-all duration-150 ease-out"
           leave-active-class="transition-all duration-100 ease-in"
@@ -225,6 +382,29 @@ function pct(value: number, max: number): string {
           >
             <p class="font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink-faint">{{ tooltip.city }}</p>
             <p class="font-mono text-[18.5px] font-bold text-ink mt-0.5">{{ tooltip.count }}<span class="text-[9.5px] font-normal text-ink-faint ml-1">jobs</span></p>
+          </div>
+        </Transition>
+      </Teleport>
+
+      <!-- Graph tooltip (matches the map tooltip aesthetic) — same overlay target -->
+      <Teleport to="#viewport-overlay-root" :disabled="!isMounted">
+        <Transition
+          enter-active-class="transition-all duration-150 ease-out"
+          leave-active-class="transition-all duration-100 ease-in"
+          enter-from-class="opacity-0 translate-y-1"
+          leave-to-class="opacity-0 translate-y-1"
+        >
+          <div
+            v-if="graphTooltip"
+            class="tooltip-panel fixed z-50 graph-tooltip"
+            :style="{ left: `${graphTooltip.x + 16}px`, top: `${graphTooltip.y - 20}px` }"
+          >
+            <p class="font-mono text-[8.5px] uppercase tracking-[0.22em] text-ink-faint flex items-center gap-2">
+              <span class="graph-tooltip-marker" :data-level="graphTooltip.level" />
+              {{ graphTooltip.level === 1 ? 'Cohort' : graphTooltip.level === 2 ? 'Sub-segment' : 'Tool · Skill' }}
+            </p>
+            <p class="font-mono text-[13px] font-semibold text-ink mt-1 leading-tight">{{ graphTooltip.label }}</p>
+            <p class="font-mono text-[9.5px] tabular-nums text-ink-light mt-0.5">{{ graphTooltip.count.toLocaleString('en-US') }} <span class="text-ink-faint">jobs</span></p>
           </div>
         </Transition>
       </Teleport>
@@ -310,16 +490,30 @@ function pct(value: number, max: number): string {
       </Transition>
 
       <!-- Viewport labels -->
-      <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
-        <p class="font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
-          geo.distribution // perspective
-        </p>
-      </div>
-      <div class="absolute top-2 right-3 z-10 pointer-events-none">
-        <p class="status-flicker font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
-          viewport.3d
-        </p>
-      </div>
+      <template v-if="viewportMode === 'map'">
+        <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
+          <p class="font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
+            geo.distribution // perspective
+          </p>
+        </div>
+        <div class="absolute top-2 left-3 z-10 pointer-events-none">
+          <p class="status-flicker font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
+            viewport.3d
+          </p>
+        </div>
+      </template>
+      <template v-else>
+        <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
+          <p class="font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
+            knowledge.mechanism // schematic
+          </p>
+        </div>
+        <div class="absolute top-2 left-3 z-10 pointer-events-none">
+          <p class="status-flicker font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
+            viewport.2d
+          </p>
+        </div>
+      </template>
     </section>
 
     <!-- ════════ CATEGORY BREAKDOWN ════════ -->
@@ -393,7 +587,10 @@ function pct(value: number, max: number): string {
     </section>
 
     <!-- ════════ EXPERIENCE LEVELS ════════ -->
-    <section class="dash-levels panel reg-marks overflow-hidden p-5">
+    <!-- Hidden when scrapes ran without detail-page fetching (no
+         seniority_level captured). Reappears automatically once a
+         detail-fetching scrape populates job_level. -->
+    <section v-if="meaningfulLevels.length" class="dash-levels panel reg-marks overflow-hidden p-5">
       <h2 class="panel-header">LVL.experience</h2>
 
       <template v-if="meaningfulLevels.length">
@@ -602,6 +799,166 @@ function pct(value: number, max: number): string {
   border-radius: 1px;
 }
 
+/* ── SYS.overview · scrape-today block ──────────────────────────── */
+.scrape-today {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-ink-ghost);
+  /* Faint registration tick at the top-left of the divider — keeps
+     the schematic-blueprint vocabulary going. */
+  position: relative;
+}
+.scrape-today::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 14px;
+  height: 1px;
+  background: var(--color-ink);
+}
+.scrape-today__header {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  margin-bottom: 10px;
+}
+.scrape-today__metrics {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.scrape-today__metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-mono);
+  color: var(--color-ink-light);
+}
+.scrape-today__sign {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-accent);
+  margin-right: 1px;
+}
+.scrape-today__count {
+  font-size: 18.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+.scrape-today__metric--primary .scrape-today__count {
+  color: var(--color-accent);
+}
+.scrape-today__unit {
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}
+.scrape-today__footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+}
+.scrape-today__footer-label {
+  text-transform: uppercase;
+  color: var(--color-ink-ghost);
+}
+.scrape-today__footer-value {
+  color: var(--color-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Teleport target — a zero-size container that lives inside the
+   viewport panel so tooltips render inside the fullscreen subtree. */
+.viewport-overlay-root {
+  position: absolute;
+  width: 0;
+  height: 0;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+/* ── Fullscreen toggle button (top-right) ────────────────────────── */
+.viewport-fs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--color-ink-ghost);
+  background: var(--color-surface);
+  color: var(--color-ink-faint);
+  cursor: pointer;
+  transition: color 160ms ease-out, background 160ms ease-out, border-color 160ms ease-out;
+}
+.viewport-fs-btn:hover {
+  color: var(--color-ink);
+  border-color: var(--color-ink);
+}
+.viewport-fs-icon {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+/* When the viewport panel is in browser-native fullscreen, its host
+   becomes the root of the screen. Stretch it edge-to-edge, drop the
+   tiny panel border so the diagram has the whole canvas. */
+.dash-viewport--fullscreen {
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+}
+.dash-viewport--fullscreen .reg-marks-full {
+  display: none;
+}
+
+/* ── Viewport mode toggle (used by both map + graph) ─────────────── */
+.viewport-toggle {
+  background: var(--color-surface);
+}
+.viewport-toggle-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--color-ink-ghost);
+  background: var(--color-surface);
+  color: var(--color-ink-faint);
+  cursor: pointer;
+  transition: color 160ms ease-out, background 160ms ease-out, border-color 160ms ease-out;
+  font-family: var(--font-mono);
+}
+.viewport-toggle-btn--right {
+  border-left: 0;
+}
+.viewport-toggle-btn:hover {
+  color: var(--color-ink);
+}
+.viewport-toggle-btn--active {
+  background: var(--color-ink);
+  color: var(--color-surface);
+  border-color: var(--color-ink);
+}
+.viewport-toggle-btn--active:hover {
+  color: var(--color-surface);
+}
+
 @media (max-width: 1100px) {
   .dash {
     grid-template-columns: 1fr 1fr;
@@ -676,5 +1033,32 @@ function pct(value: number, max: number): string {
   transform: translateX(-50%);
   border: 5px solid transparent;
   border-top-color: #1a1a1a;
+}
+
+/* Graph tooltip — uses .tooltip-panel base, adds a level marker glyph */
+.graph-tooltip {
+  min-width: 180px;
+}
+.graph-tooltip-marker {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1.2px solid var(--color-ink);
+  flex-shrink: 0;
+}
+/* level 1 = cohort: solid black square */
+.graph-tooltip-marker[data-level="1"] {
+  background: var(--color-ink);
+}
+/* level 2 = sub-segment: open square */
+.graph-tooltip-marker[data-level="2"] {
+  background: var(--color-surface);
+}
+/* level 3 = tool: crosshair */
+.graph-tooltip-marker[data-level="3"] {
+  background:
+    linear-gradient(var(--color-ink), var(--color-ink)) center / 100% 1.2px no-repeat,
+    linear-gradient(var(--color-ink), var(--color-ink)) center / 1.2px 100% no-repeat;
+  border-color: transparent;
 }
 </style>

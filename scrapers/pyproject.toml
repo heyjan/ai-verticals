@@ -1,0 +1,19 @@
+[project]
+name = "ai-job-scrapers"
+version = "0.1.0"
+description = "LinkedIn + Glassdoor scrapers for the AI job classifier."
+requires-python = ">=3.14"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "curl-cffi>=0.15.0",
+    "lxml>=6.1.0",
+    "rapidfuzz>=3.14.5",
+    "thefuzz>=0.22.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scrapers"]

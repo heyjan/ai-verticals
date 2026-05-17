@@ -1,0 +1,47 @@
+{
+  "id": "00000000-0000-0000-0000-000000000000",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.jobs": {
+      "name": "jobs",
+      "schema": "",
+      "columns": {
+        "id": { "name": "id", "type": "serial", "primaryKey": true, "notNull": true },
+        "source": { "name": "source", "type": "text", "primaryKey": false, "notNull": true },
+        "source_id": { "name": "source_id", "type": "text", "primaryKey": false, "notNull": true },
+        "title": { "name": "title", "type": "text", "primaryKey": false, "notNull": true },
+        "company": { "name": "company", "type": "text", "primaryKey": false, "notNull": true },
+        "location": { "name": "location", "type": "text", "primaryKey": false, "notNull": true },
+        "city": { "name": "city", "type": "text", "primaryKey": false, "notNull": true },
+        "description": { "name": "description", "type": "text", "primaryKey": false, "notNull": true, "default": "''" },
+        "salary": { "name": "salary", "type": "text", "primaryKey": false, "notNull": true, "default": "''" },
+        "job_level": { "name": "job_level", "type": "text", "primaryKey": false, "notNull": true, "default": "''" },
+        "posted_ago": { "name": "posted_ago", "type": "text", "primaryKey": false, "notNull": true, "default": "''" },
+        "contract_type": { "name": "contract_type", "type": "text", "primaryKey": false, "notNull": true, "default": "''" },
+        "sector": { "name": "sector", "type": "text", "primaryKey": false, "notNull": true, "default": "''" },
+        "url": { "name": "url", "type": "text", "primaryKey": false, "notNull": true, "default": "''" },
+        "category": { "name": "category", "type": "text", "primaryKey": false, "notNull": true, "default": "'Other'" },
+        "first_seen_at": { "name": "first_seen_at", "type": "timestamp with time zone", "primaryKey": false, "notNull": true, "default": "now()" },
+        "last_seen_at": { "name": "last_seen_at", "type": "timestamp with time zone", "primaryKey": false, "notNull": true, "default": "now()" },
+        "created_at": { "name": "created_at", "type": "timestamp with time zone", "primaryKey": false, "notNull": true, "default": "now()" },
+        "updated_at": { "name": "updated_at", "type": "timestamp with time zone", "primaryKey": false, "notNull": true, "default": "now()" }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": { "columns": {}, "schemas": {}, "tables": {} }
+}
