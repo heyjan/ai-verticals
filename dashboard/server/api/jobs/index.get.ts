@@ -2,18 +2,12 @@
  * GET /api/jobs
  *
  * Paginated job listing with optional filters.
- *
- * Query parameters:
- *   - page     (default: 1)
- *   - limit    (default: 20, max: 100)
- *   - category (exact match)
- *   - city     (exact match)
- *   - search   (LIKE match against title and company)
- *
- * Returns { jobs, total, page, pages }
  */
 
-import { getDb } from '../../database'
+import { jobs } from '@ai-job-classifier/db'
+import { and, asc, count, eq, ilike, or, type SQL } from 'drizzle-orm'
+
+import { db } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -24,62 +18,46 @@ export default defineEventHandler(async (event) => {
   const city = (query.city as string) || ''
   const search = (query.search as string) || ''
 
-  const db = await getDb()
-
-  // Build dynamic WHERE clause
-  const conditions: string[] = []
-  const params: Record<string, string | number> = {}
-
-  if (category) {
-    conditions.push('category = :category')
-    params[':category'] = category
-  }
-  if (city) {
-    conditions.push('city = :city')
-    params[':city'] = city
-  }
+  const filters: SQL[] = []
+  if (category) filters.push(eq(jobs.category, category))
+  if (city) filters.push(eq(jobs.city, city))
   if (search) {
-    conditions.push('(title LIKE :search OR company LIKE :search)')
-    params[':search'] = `%${search}%`
+    const term = `%${search}%`
+    const expr = or(ilike(jobs.title, term), ilike(jobs.company, term))
+    if (expr) filters.push(expr)
   }
+  const where = filters.length ? and(...filters) : undefined
 
-  const whereClause = conditions.length > 0
-    ? `WHERE ${conditions.join(' AND ')}`
-    : ''
-
-  // Count total matching rows
-  const countStmt = db.prepare(`SELECT COUNT(*) FROM jobs ${whereClause}`)
-  if (Object.keys(params).length > 0) countStmt.bind(params)
-  countStmt.step()
-  const total = countStmt.get()[0] as number
-  countStmt.free()
+  const [{ value: total }] = await db
+    .select({ value: count() })
+    .from(jobs)
+    .where(where)
 
   const pages = Math.ceil(total / limit)
   const offset = (page - 1) * limit
 
-  // Fetch the page
-  const dataParams = { ...params, ':limit': limit, ':offset': offset }
-  const dataStmt = db.prepare(`
-    SELECT id, source, source_id, title, company, location, city,
-           salary, job_level, posted_ago, contract_type, sector, url, category
-    FROM jobs
-    ${whereClause}
-    ORDER BY id ASC
-    LIMIT :limit OFFSET :offset
-  `)
-  dataStmt.bind(dataParams)
+  const rows = await db
+    .select({
+      id: jobs.id,
+      source: jobs.source,
+      source_id: jobs.sourceId,
+      title: jobs.title,
+      company: jobs.company,
+      location: jobs.location,
+      city: jobs.city,
+      salary: jobs.salary,
+      job_level: jobs.jobLevel,
+      posted_ago: jobs.postedAgo,
+      contract_type: jobs.contractType,
+      sector: jobs.sector,
+      url: jobs.url,
+      category: jobs.category,
+    })
+    .from(jobs)
+    .where(where)
+    .orderBy(asc(jobs.id))
+    .limit(limit)
+    .offset(offset)
 
-  const jobs: Record<string, unknown>[] = []
-  while (dataStmt.step()) {
-    const row = dataStmt.getAsObject()
-    jobs.push(row)
-  }
-  dataStmt.free()
-
-  return {
-    jobs,
-    total,
-    page,
-    pages,
-  }
+  return { jobs: rows, total, page, pages }
 })

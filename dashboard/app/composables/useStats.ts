@@ -11,5 +11,7 @@ export function useStats() {
     watch: [companyFilter],
   })
 
-  return { overview, byCategory, byCity, byLevel, topCompanies, companyFilter }
+  const knowledgeGraph = useFetch('/api/knowledge-graph', { lazy: true })
+
+  return { overview, byCategory, byCity, byLevel, topCompanies, companyFilter, knowledgeGraph }
 }

@@ -1,27 +1,39 @@
-import { getDb } from '../../database'
+/**
+ * GET /api/stats/city-detail?city=...
+ *
+ * Returns salary statistics for a given city.
+ */
+
+import { jobs } from '@ai-job-classifier/db'
+import { and, ilike, like, sql } from 'drizzle-orm'
+
+import { db } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const city = (query.city as string || '').trim()
   if (!city) return { error: 'city parameter required' }
 
-  const db = await getDb()
+  const rows = await db
+    .select({ salary: jobs.salary, title: jobs.title })
+    .from(jobs)
+    .where(
+      and(
+        sql`lower(${jobs.city}) = lower(${city})`,
+        sql`${jobs.salary} <> ''`,
+        like(jobs.salary, '%EUR%'),
+      ),
+    )
 
-  const rows = db.exec(
-    `SELECT salary, title FROM jobs WHERE LOWER(city) = LOWER(?) AND salary IS NOT NULL AND salary != '' AND salary LIKE '%EUR%'`,
-    [city],
-  )
-
-  if (!rows.length || !rows[0].values.length) return { city, salaries: [], count: 0 }
+  if (!rows.length) return { city, salaries: [], count: 0 }
 
   const internPattern = /\b(trainee|internship|intern|praktik)/i
-
   const parsed: { low: number; high: number }[] = []
-  for (const row of rows[0].values) {
-    const raw = row[0] as string
-    const title = (row[1] as string) || ''
+
+  for (const row of rows) {
     try {
-      if (internPattern.test(title)) continue
+      if (internPattern.test(row.title || '')) continue
+      const raw = row.salary
       const isHourly = raw.includes('(hourly)')
       const isMonthly = raw.includes('(monthly)')
       const nums = raw.split(' ')[0]

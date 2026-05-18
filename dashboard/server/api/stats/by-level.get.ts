@@ -1,23 +1,18 @@
 /**
  * GET /api/stats/by-level
- *
- * Returns an array of { level, count } for distinct job levels,
- * sorted by count descending.
  */
 
-import { getDb } from '../../database'
+import { jobs } from '@ai-job-classifier/db'
+import { count, sql } from 'drizzle-orm'
+
+import { db } from '../../utils/db'
 
 export default defineEventHandler(async () => {
-  const db = await getDb()
+  const rows = await db
+    .select({ level: jobs.jobLevel, count: count() })
+    .from(jobs)
+    .groupBy(jobs.jobLevel)
+    .orderBy(sql`count(*) DESC`)
 
-  const result = db.exec(
-    'SELECT job_level, COUNT(*) as count FROM jobs GROUP BY job_level ORDER BY count DESC',
-  )
-
-  if (result.length === 0) return []
-
-  return result[0].values.map(row => ({
-    level: row[0] as string,
-    count: row[1] as number,
-  }))
+  return rows
 })

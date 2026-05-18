@@ -1,89 +1,27 @@
 /**
  * GET /api/stats/top-companies?filter=all|us
- *
- * Returns the top 50 companies by job count, each with an array
- * of distinct categories they hire for.
- * When filter=us, only returns companies matching known US tech firms.
  */
 
-import { getDb } from '../../database'
+import { companyDescriptions, jobs } from '@ai-job-classifier/db'
+import { count, eq, sql } from 'drizzle-orm'
+
+import { db } from '../../utils/db'
 
 const US_COMPANY_PREFIXES = [
-  'accenture',
-  'adobe',
-  'agilent',
-  'amazon',
-  'amd ',
-  'anthropic',
-  'apple',
-  'applied materials',
-  'aws ',
-  'aws emea',
-  'boeing',
-  'boston scientific',
-  'broadcom',
-  'caterpillar',
-  'cisco',
-  'citi',
-  'cloudflare',
-  'cognizant',
-  'coinbase',
-  'corning',
-  'crowdstrike',
-  'cummins',
-  'databricks',
-  'datadog',
-  'dell',
-  'figma',
-  'garmin',
-  'ge aerospace',
-  'ge healthcare',
-  'general dynamics',
-  'google',
-  'hewlett packard',
-  'honeywell',
-  'ibm',
-  'intel',
-  'intuit',
-  'intuitive',
-  'iqvia',
-  'john deere',
-  'johnson & johnson',
-  'jpmorgan',
-  'keysight',
-  'kraken',
-  'merck',
-  'meta platforms',
-  'microsoft',
-  'mongodb',
-  'netflix',
-  'nvidia',
-  'nxp',
-  'okta',
-  'openai',
-  'oracle',
-  'palantir',
-  'palo alto networks',
-  'procter & gamble',
-  'qualcomm',
-  'salesforce',
-  'servicenow',
-  'snowflake',
-  'spacex',
-  'stripe',
-  'stryker',
-  'te connectivity',
-  'tesla',
-  'thermo fisher',
-  'trimble',
-  'twilio',
-  'uber',
-  'veeva systems',
-  'vmware',
-  'western digital',
-  'workday',
-  'zebra',
-  'zscaler',
+  'accenture', 'adobe', 'agilent', 'amazon', 'amd ', 'anthropic', 'apple',
+  'applied materials', 'aws ', 'aws emea', 'boeing', 'boston scientific',
+  'broadcom', 'caterpillar', 'cisco', 'citi', 'cloudflare', 'cognizant',
+  'coinbase', 'corning', 'crowdstrike', 'cummins', 'databricks', 'datadog',
+  'dell', 'figma', 'garmin', 'ge aerospace', 'ge healthcare',
+  'general dynamics', 'google', 'hewlett packard', 'honeywell', 'ibm',
+  'intel', 'intuit', 'intuitive', 'iqvia', 'john deere',
+  'johnson & johnson', 'jpmorgan', 'keysight', 'kraken', 'merck',
+  'meta platforms', 'microsoft', 'mongodb', 'netflix', 'nvidia', 'nxp',
+  'okta', 'openai', 'oracle', 'palantir', 'palo alto networks',
+  'procter & gamble', 'qualcomm', 'salesforce', 'servicenow', 'snowflake',
+  'spacex', 'stripe', 'stryker', 'te connectivity', 'tesla',
+  'thermo fisher', 'trimble', 'twilio', 'uber', 'veeva systems', 'vmware',
+  'western digital', 'workday', 'zebra', 'zscaler',
 ]
 
 const US_EXCLUDE = ['amazonen-werke', 'citizengo', 'snapaddy', 'merck kgaa', 'merck group', 'merck healthcare']
@@ -97,53 +35,49 @@ function isUsCompany(name: string): boolean {
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const filter = (query.filter as string) || 'all'
-  const db = await getDb()
 
-  const countResult = db.exec(
-    'SELECT company, COUNT(*) as count FROM jobs GROUP BY company ORDER BY count DESC',
-  )
+  const counts = await db
+    .select({ company: jobs.company, count: count() })
+    .from(jobs)
+    .groupBy(jobs.company)
+    .orderBy(sql`count(*) DESC`)
 
-  if (countResult.length === 0) return []
+  let companies = filter === 'us' ? counts.filter(c => isUsCompany(c.company)) : counts
+  companies = companies.slice(0, 50)
+  if (!companies.length) return []
 
-  let companies = countResult[0].values.map(row => ({
-    company: row[0] as string,
-    count: row[1] as number,
-  }))
+  const names = companies.map(c => c.company)
 
-  if (filter === 'us') {
-    companies = companies.filter(c => isUsCompany(c.company))
+  // Bind the company-name list as a single Postgres text[] parameter via
+  // sql.join. Interpolating a JS array directly into the `sql` template
+  // expands it to a record `($1,$2,…)`, which Postgres rejects when cast
+  // to text[] with "cannot cast type record to text[]".
+  const namesArr = sql`ARRAY[${sql.join(names.map(n => sql`${n}`), sql`, `)}]::text[]`
+
+  const categoryRows = await db
+    .selectDistinct({ company: jobs.company, category: jobs.category })
+    .from(jobs)
+    .where(sql`${jobs.company} = ANY(${namesArr})`)
+    .orderBy(jobs.category)
+
+  const categoriesByCompany = new Map<string, string[]>()
+  for (const r of categoryRows) {
+    const arr = categoriesByCompany.get(r.company) ?? []
+    arr.push(r.category)
+    categoriesByCompany.set(r.company, arr)
   }
 
-  companies = companies.slice(0, 50)
+  const descRows = await db
+    .select({ company: companyDescriptions.company, description: companyDescriptions.description })
+    .from(companyDescriptions)
+    .where(sql`${companyDescriptions.company} = ANY(${namesArr})`)
 
-  const stmt = db.prepare(
-    'SELECT DISTINCT category FROM jobs WHERE company = :company ORDER BY category',
-  )
+  const descByCompany = new Map(descRows.map(r => [r.company, r.description]))
 
-  const descStmt = db.prepare(
-    'SELECT description FROM company_descriptions WHERE company = :company',
-  )
-
-  const result = companies.map(({ company, count }) => {
-    stmt.bind({ ':company': company })
-    const categories: string[] = []
-    while (stmt.step()) {
-      categories.push(stmt.get()[0] as string)
-    }
-    stmt.reset()
-
-    let description: string | null = null
-    descStmt.bind({ ':company': company })
-    if (descStmt.step()) {
-      description = descStmt.get()[0] as string
-    }
-    descStmt.reset()
-
-    return { company, count, categories, description }
-  })
-
-  stmt.free()
-  descStmt.free()
-
-  return result
+  return companies.map(({ company, count }) => ({
+    company,
+    count,
+    categories: categoriesByCompany.get(company) ?? [],
+    description: descByCompany.get(company) ?? null,
+  }))
 })

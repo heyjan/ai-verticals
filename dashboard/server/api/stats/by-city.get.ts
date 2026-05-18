@@ -2,11 +2,13 @@
  * GET /api/stats/by-city
  *
  * Returns cities with job counts and lat/lon coordinates.
- * Non-geographic values (country names, states, "Home office") are excluded.
- * Metro region values are mapped to their parent city.
+ * Non-geographic values are excluded; metro regions are mapped to their parent city.
  */
 
-import { getDb } from '../../database'
+import { jobs } from '@ai-job-classifier/db'
+import { and, count, isNotNull, ne, sql } from 'drizzle-orm'
+
+import { db } from '../../utils/db'
 
 const CITY_COORDS: Record<string, { lat: number, lon: number }> = {
   'aachen': { lat: 50.7753, lon: 6.0839 },
@@ -98,7 +100,6 @@ const CITY_COORDS: Record<string, { lat: number, lon: number }> = {
   'wedel': { lat: 53.5833, lon: 9.7000 },
 }
 
-// Metro region / vague location → parent city mapping
 const CITY_ALIASES: Record<string, string> = {
   'metropolregion münchen': 'münchen',
   'metropolregion berlin/brandenburg': 'berlin',
@@ -116,7 +117,6 @@ const CITY_ALIASES: Record<string, string> = {
   'metropole ruhr': 'essen',
 }
 
-// Values that are not real cities — exclude from map
 const EXCLUDED_VALUES = new Set([
   'deutschland', 'germany',
   'home office', 'homeoffice', 'remote',
@@ -147,23 +147,18 @@ function lookupCoords(city: string): { lat: number | null, lon: number | null } 
 }
 
 export default defineEventHandler(async () => {
-  const db = await getDb()
+  const rows = await db
+    .select({ city: jobs.city, count: count() })
+    .from(jobs)
+    .where(and(isNotNull(jobs.city), ne(jobs.city, '')))
+    .groupBy(jobs.city)
+    .orderBy(sql`count(*) DESC`)
 
-  const result = db.exec(
-    'SELECT city, COUNT(*) as count FROM jobs WHERE city IS NOT NULL AND city != \'\' GROUP BY city ORDER BY count DESC',
-  )
-
-  if (result.length === 0) return []
-
-  // Aggregate after resolving aliases and filtering
   const cityMap = new Map<string, number>()
-
-  for (const row of result[0].values) {
-    const rawCity = row[0] as string
-    const count = row[1] as number
-    const resolved = resolveCity(rawCity)
+  for (const row of rows) {
+    const resolved = resolveCity(row.city)
     if (!resolved) continue
-    cityMap.set(resolved, (cityMap.get(resolved) || 0) + count)
+    cityMap.set(resolved, (cityMap.get(resolved) || 0) + row.count)
   }
 
   return Array.from(cityMap.entries())

@@ -1,0 +1,16 @@
+{
+  "name": "ai-job-classifier",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "db",
+    "dashboard",
+    "classifier"
+  ],
+  "scripts": {
+    "seed": "npm run seed --workspace=@ai-job-classifier/db",
+    "import": "npm run import --workspace=@ai-job-classifier/db",
+    "migrate": "npm run migrate --workspace=@ai-job-classifier/db",
+    "dev": "npm run dev --workspace=ai-job-dashboard"
+  }
+}

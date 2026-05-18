@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+scrapers/.venv/
 
 # Node / Nuxt
 node_modules/
@@ -9,24 +10,40 @@ node_modules/
 .output/
 .data/
 *.db
+# Exception: the committed bootstrap SQLite is the source of truth for fresh deploys.
+!data/seed/jobs.db
 
-# Raw scrape data (large, regenerable)
-data/glassdoor_jobs_*.json
-data/glassdoor_cities_2*.json
-data/glassdoor_cities_2*.csv
-data/linkedin_jobs_*.json
-data/glassdoor_all_combined.json
-data/linkedin_all_combined.json
+# Compiled TS
+dist/
+build/
+
+# Raw scrape data (large, regenerable — kept locally only)
+data/raw/
+
+# Processed dataset, except the stable "latest" pointer used by
+# `make import` and the seed image. Timestamped artifacts stay local.
+data/processed/merged_jobs_*.json
+data/processed/removed_jobs_*.json
+
+# Old top-level data layout (pre-restructure) — these files were moved
+# to scrapers/ artifacts and are not part of the new convention.
+data/linkedin_*.json
+data/glassdoor_*.json
+data/merged_jobs_*.json
+data/removed_jobs_*.json
 
 # Playwright artifacts
 test-results/
 dashboard/test-results/
+dashboard/playwright-report/
+dashboard/e2e/screenshots/
 
 # Logs
 *.log
 
 # Secrets
 .env
+.env.local
 
 # OS
 .DS_Store
@@ -35,3 +52,12 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Local notes / scratch — not part of the repo's public docs.
+docs/
+
+# Markdown files are local notes by default; only README.md and AGENTS.md are tracked.
+*.md
+!README.md
+!**/README.md
+!AGENTS.md

@@ -32,12 +32,8 @@ export default defineNuxtConfig({
     experimental: {
       asyncContext: true,
     },
-    externals: {
-      external: ['sql.js'],
-    },
   },
   runtimeConfig: {
-    dataFilePath: process.env.DATA_FILE_PATH || '../data/merged_jobs_20260511_083938.json',
-    databasePath: process.env.DATABASE_PATH || '.data/jobs.db',
+    databaseUrl: process.env.DATABASE_URL,
   },
 })

@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jobs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jobs}
+      POSTGRES_DB: ${POSTGRES_DB:-jobs}
+      # Use a subdirectory inside the mounted volume for the actual data
+      # cluster. Rootless podman creates named-volume mountpoints owned by
+      # host root, so postgres-user (UID 70 inside the container) can't
+      # chmod the root of the mount. Pointing PGDATA at a child path lets
+      # the entrypoint mkdir + chmod a fresh subdir it owns. Portable to
+      # Docker (no-op there since Docker handles volume ownership).
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  seed:
+    build:
+      context: .
+      dockerfile: db/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://jobs:jobs@postgres:5432/jobs}
+      SEED_DB_PATH: /app/data/seed/jobs.db
+    # No bind mount: the seed image bakes in data/seed/jobs.db so a
+    # remote deploy bootstraps without any host mount. A bind mount
+    # here would shadow that file and trip SELinux on Fedora/podman.
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://jobs:jobs@postgres:5432/jobs}
+      HOST: 0.0.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+
+  classifier-agent:
+    build:
+      context: .
+      dockerfile: classifier/Dockerfile
+    command: ["npx", "tsx", "src/interactive.ts"]
+    stdin_open: true
+    tty: true
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://jobs:jobs@postgres:5432/jobs}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      PI_COMPACT_EVERY_TURNS: ${PI_COMPACT_EVERY_TURNS:-20}
+    volumes:
+      # `:Z` so podman/SELinux relabels the host dir for container access.
+      # `:ro` because the agent only reads from data/ (e.g. for ad-hoc imports
+      # the user runs from inside the session); writes go to Postgres.
+      - ./data:/app/data:ro,Z
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+
+volumes:
+  pg-data:
