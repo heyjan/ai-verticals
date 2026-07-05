@@ -38,7 +38,7 @@ def list_processes() -> list[dict]:
         return []
 
     procs: list[dict] = []
-    pat = re.compile(r"scrapers\.(linkedin_cities|glassdoor_cities)\b")
+    pat = re.compile(r"scrapers\.(linkedin_cities|glassdoor_cities|xing_cities)\b")
     for line in out.splitlines():
         parts = line.strip().split(None, 2)
         if len(parts) < 3:
@@ -140,6 +140,8 @@ def main() -> int:
     report_source("linkedin")
     print()
     report_source("glassdoor")
+    print()
+    report_source("xing")
     print()
     return 0
 

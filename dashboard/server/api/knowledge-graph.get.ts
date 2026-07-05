@@ -34,7 +34,7 @@ export default defineEventHandler(async () => {
   const catRows = await db
     .select({ category: jobs.category, cnt: count() })
     .from(jobs)
-    .where(ne(jobs.category, 'Other'))
+    .where(and(ne(jobs.category, 'Other'), eq(jobs.active, true)))
     .groupBy(jobs.category)
     .orderBy(desc(count()))
 
@@ -45,17 +45,21 @@ export default defineEventHandler(async () => {
     count: r.cnt,
   }))
 
+  // Count only associations to *active* jobs: join through to jobs with an
+  // active=true condition and count jobs.id (null for soft-deleted rows, so
+  // they drop out). The outer LEFT JOINs keep zero-count subcategories.
   const subRows = await db
     .select({
       id: subcategories.id,
       category: subcategories.category,
       name: subcategories.name,
-      cnt: count(jobSubcategories.jobId),
+      cnt: count(jobs.id),
     })
     .from(subcategories)
     .leftJoin(jobSubcategories, eq(jobSubcategories.subcategoryId, subcategories.id))
+    .leftJoin(jobs, and(eq(jobs.id, jobSubcategories.jobId), eq(jobs.active, true)))
     .groupBy(subcategories.id)
-    .orderBy(desc(count(jobSubcategories.jobId)))
+    .orderBy(desc(count(jobs.id)))
 
   const subs = subRows.map((r) => ({
     dbId: r.id,
@@ -70,13 +74,14 @@ export default defineEventHandler(async () => {
     .select({
       id: tools.id,
       name: tools.name,
-      cnt: count(jobTools.jobId),
+      cnt: count(jobs.id),
     })
     .from(tools)
     .leftJoin(jobTools, eq(jobTools.toolId, tools.id))
+    .leftJoin(jobs, and(eq(jobs.id, jobTools.jobId), eq(jobs.active, true)))
     .groupBy(tools.id)
-    .having(sql`count(${jobTools.jobId}) > 0`)
-    .orderBy(desc(count(jobTools.jobId)))
+    .having(sql`count(${jobs.id}) > 0`)
+    .orderBy(desc(count(jobs.id)))
     .limit(TOP_TOOLS_LIMIT)
 
   const toolList = toolRows.map((r) => ({
@@ -113,6 +118,7 @@ export default defineEventHandler(async () => {
       })
       .from(jobSubcategories)
       .innerJoin(jobTools, eq(jobTools.jobId, jobSubcategories.jobId))
+      .innerJoin(jobs, and(eq(jobs.id, jobSubcategories.jobId), eq(jobs.active, true)))
       .where(and(
         sql`${jobSubcategories.subcategoryId} = ANY(${subIdsLit})`,
         sql`${jobTools.toolId} = ANY(${toolIdsLit})`,

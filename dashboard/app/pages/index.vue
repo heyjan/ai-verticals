@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { overview, byCategory, byCity, byLevel, topCompanies, companyFilter, knowledgeGraph } = useStats()
+const { overview, byCategory, byCity, byLevel, topCompanies, companyFilter, knowledgeGraph, growth, recentJobs } = useStats()
 
 const stats = computed(() => overview.data.value as Record<string, any> | undefined)
 const categories = computed(() => (byCategory.data.value as any[] | undefined) ?? [])
@@ -16,26 +16,6 @@ const lastUpdated = computed(() => {
   if (!iso) return null
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 })
-
-/**
- * Format an ISO timestamp as a short relative-ish string:
- *   - same day → "16:21"
- *   - yesterday → "yesterday · 14:33"
- *   - older → "May 13"
- * Matches the dashboard's monospace small-caps register.
- */
-function formatScrapeAt(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  const now = new Date()
-  const sameDay = d.toDateString() === now.toDateString()
-  const yesterday = new Date(now)
-  yesterday.setDate(now.getDate() - 1)
-  const isYesterday = d.toDateString() === yesterday.toDateString()
-  if (sameDay) return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-  if (isYesterday) return `yesterday · ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
-}
 
 const maxCategoryCount = computed(() => {
   if (!categories.value.length) return 1
@@ -76,11 +56,17 @@ function onMapHover(payload: { city: string; count: number; screenX: number; scr
     : null
 }
 
-type ViewportMode = 'map' | 'graph'
-const viewportMode = ref<ViewportMode>('map')
+type ViewportMode = 'metrics' | 'graph' | 'map'
+const viewportMode = ref<ViewportMode>('metrics')
 const graphData = computed(() => {
   const data = knowledgeGraph.data.value as { nodes: any[]; edges: any[] } | undefined
   return data && Array.isArray(data.nodes) ? data : { nodes: [], edges: [] }
+})
+
+const growthData = computed(() => growth.data.value as any | undefined)
+const recentJobsData = computed<any[]>(() => {
+  const d = recentJobs.data.value as { jobs?: any[] } | undefined
+  return Array.isArray(d?.jobs) ? d!.jobs : []
 })
 
 // ── Fullscreen: take the viewport panel to the full screen via the
@@ -112,10 +98,22 @@ const isMounted = ref(false)
 onMounted(() => {
   isMounted.value = true
   document.addEventListener('fullscreenchange', onFullscreenChange)
+  document.addEventListener('pointerdown', onDocumentPointerDown)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', onFullscreenChange)
+  document.removeEventListener('pointerdown', onDocumentPointerDown)
 })
+
+function onDocumentPointerDown(e: PointerEvent) {
+  // Dismiss the company tooltip when tapping/clicking outside an info icon.
+  // The icon itself stops propagation via @click.stop, but pointerdown still
+  // bubbles, so we check the target.
+  const target = e.target as HTMLElement | null
+  if (!target?.closest('[data-company-info]')) {
+    hideCompanyTooltip()
+  }
+}
 
 const graphTooltip = ref<{ label: string; count: number; level: number; x: number; y: number } | null>(null)
 function onGraphHover(
@@ -129,36 +127,67 @@ function onGraphHover(
 const selectedCity = ref<string | null>(null)
 const cityDetail = ref<any>(null)
 const cityDetailPending = ref(false)
+const currentJobIndex = ref(0)
+// Sequence number so a slower fetch for a previous city can't overwrite
+// the result of a newer click. Without this, rapid city switches can
+// leave the panel showing data for the wrong city.
+let cityFetchSeq = 0
 
 async function onCitySelect(city: string) {
   if (selectedCity.value === city) {
     selectedCity.value = null
     cityDetail.value = null
+    currentJobIndex.value = 0
     return
   }
+  const seq = ++cityFetchSeq
   selectedCity.value = city
   cityDetailPending.value = true
+  // Don't clear cityDetail here — the stale data keeps the card and
+  // summary rendered while the new fetch is in flight, so switching
+  // cities feels instant instead of unmounting/remounting the card.
+  // The seq check below discards the response if the user has moved on.
+  currentJobIndex.value = 0
   try {
     const data = await $fetch('/api/stats/city-detail', { params: { city } })
+    if (seq !== cityFetchSeq) return
     cityDetail.value = data
   } catch {
+    if (seq !== cityFetchSeq) return
     cityDetail.value = null
   }
+  if (seq !== cityFetchSeq) return
   cityDetailPending.value = false
 }
 
 function closeCityDetail() {
+  cityFetchSeq++
   selectedCity.value = null
   cityDetail.value = null
+  currentJobIndex.value = 0
 }
 
 function formatSalary(n: number): string {
   return `${Math.round(n / 1000)}k`
 }
 
+const jobsWithSalary = computed<any[]>(() => {
+  const r = cityDetail.value?.ranges
+  return Array.isArray(r) ? r : []
+})
+
+const currentJob = computed(() => jobsWithSalary.value[currentJobIndex.value] ?? null)
+
+function prevJob() {
+  if (currentJobIndex.value > 0) currentJobIndex.value--
+}
+function nextJob() {
+  if (currentJobIndex.value < jobsWithSalary.value.length - 1) currentJobIndex.value++
+}
+
 const companyTooltip = ref<{ text: string; x: number; y: number } | null>(null)
 
-function showCompanyTooltip(e: MouseEvent, description: string) {
+function showCompanyTooltip(e: Event, description: string) {
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
   companyTooltip.value = {
     text: description,
@@ -169,6 +198,14 @@ function showCompanyTooltip(e: MouseEvent, description: string) {
 
 function hideCompanyTooltip() {
   companyTooltip.value = null
+}
+
+function toggleCompanyTooltip(e: Event, description: string) {
+  if (companyTooltip.value?.text === description) {
+    hideCompanyTooltip()
+  } else {
+    showCompanyTooltip(e, description)
+  }
 }
 
 const companiesPage = ref(0)
@@ -216,64 +253,14 @@ function pct(value: number, max: number): string {
 
     <!-- ════════ STATS COLUMN ════════ -->
     <aside class="dash-stats panel reg-marks p-5">
-      <h2 class="panel-header">SYS.overview</h2>
+      <h2 class="panel-header">SYS.info</h2>
 
-      <p class="text-[10.5px] leading-relaxed text-ink-light mb-4">
+      <p class="text-[13px] leading-relaxed text-ink-light mb-4">
         Wo wird KI in Deutschland wirklich eingesetzt? Dieses Dashboard analysiert
         Stellenanzeigen und macht sichtbar, welche Unternehmen KI-Lösungen implementieren
-        &mdash; in welchen Städten, Branchen und Rollen.
+        &mdash; in welchen Städten, Branchen und Rollen. Ein ausgezeichnetes Werkzeug
+        zur Identifikation von KI-Anwendungsfällen (Use Cases).
       </p>
-
-      <template v-if="stats">
-        <div class="grid grid-cols-2 gap-x-4 gap-y-5">
-          <div class="stagger-item" style="animation-delay: 0.1s">
-            <p class="stat-value">{{ stats.total?.toLocaleString('de-DE') }}</p>
-            <p class="stat-label">Jobs</p>
-          </div>
-          <div class="stagger-item" style="animation-delay: 0.2s">
-            <p class="stat-value">{{ stats.totalCompanies?.toLocaleString('de-DE') }}</p>
-            <p class="stat-label">Companies</p>
-          </div>
-          <div class="stagger-item" style="animation-delay: 0.3s">
-            <p class="stat-value">{{ stats.totalCities?.toLocaleString('de-DE') }}</p>
-            <p class="stat-label">Cities</p>
-          </div>
-          <div class="stagger-item" style="animation-delay: 0.4s">
-            <p class="stat-value">{{ stats.totalCategories?.toLocaleString('de-DE') }}</p>
-            <p class="stat-label">Segments</p>
-          </div>
-        </div>
-
-        <!-- Daily scrape activity. Always visible so the layout stays
-             stable; "—" when there's been no scrape today. -->
-        <div class="scrape-today stagger-item" style="animation-delay: 0.5s">
-          <p class="scrape-today__header">SCRAPE.today</p>
-          <div class="scrape-today__metrics">
-            <div class="scrape-today__metric scrape-today__metric--primary">
-              <span class="scrape-today__sign">+</span>
-              <span class="scrape-today__count">{{ (stats.newToday ?? 0).toLocaleString('de-DE') }}</span>
-              <span class="scrape-today__unit">new</span>
-            </div>
-            <div class="scrape-today__metric">
-              <span class="scrape-today__count">{{ (stats.updatedToday ?? 0).toLocaleString('de-DE') }}</span>
-              <span class="scrape-today__unit">updated</span>
-            </div>
-          </div>
-          <p class="scrape-today__footer">
-            <span class="scrape-today__footer-label">Last scrape</span>
-            <span class="scrape-today__footer-value">{{ formatScrapeAt(stats.lastScrapeAt ?? null) }}</span>
-          </p>
-        </div>
-      </template>
-
-      <template v-else>
-        <div class="grid grid-cols-2 gap-4">
-          <div v-for="i in 4" :key="i">
-            <div class="h-7 w-16 animate-pulse bg-surface-ruled" />
-            <div class="mt-1 h-2 w-10 animate-pulse bg-surface-ruled" />
-          </div>
-        </div>
-      </template>
     </aside>
 
     <!-- ════════ VIEWPORT ════════ -->
@@ -317,19 +304,30 @@ function pct(value: number, max: number): string {
         <div class="flex font-mono text-[8.5px] uppercase tracking-[0.18em] viewport-toggle">
           <button
             class="viewport-toggle-btn"
-            :class="viewportMode === 'map' ? 'viewport-toggle-btn--active' : ''"
-            @click="viewportMode = 'map'"
-          >map</button>
+            :class="viewportMode === 'metrics' ? 'viewport-toggle-btn--active' : ''"
+            @click="viewportMode = 'metrics'"
+          >growth</button>
           <button
             class="viewport-toggle-btn viewport-toggle-btn--right"
             :class="viewportMode === 'graph' ? 'viewport-toggle-btn--active' : ''"
             @click="viewportMode = 'graph'"
           >graph</button>
+          <button
+            class="viewport-toggle-btn viewport-toggle-btn--right"
+            :class="viewportMode === 'map' ? 'viewport-toggle-btn--active' : ''"
+            @click="viewportMode = 'map'"
+          >map</button>
         </div>
       </div>
 
       <ClientOnly>
-        <SceneSetup v-if="viewportMode === 'map'" :mode="viewportMode">
+        <GrowthDashboard
+          v-if="viewportMode === 'metrics'"
+          :data="growthData"
+          :jobs="recentJobsData"
+          :pending="growth.pending.value"
+        />
+        <SceneSetup v-else-if="viewportMode === 'map'" mode="map">
           <AnimatedGrid />
           <GermanyMap
             v-if="mappableCities.length"
@@ -409,7 +407,7 @@ function pct(value: number, max: number): string {
         </Transition>
       </Teleport>
 
-      <!-- City detail panel -->
+      <!-- City detail stack: salary summary + swipeable per-job card -->
       <Transition
         enter-active-class="transition-all duration-200 ease-out"
         leave-active-class="transition-all duration-150 ease-in"
@@ -418,74 +416,151 @@ function pct(value: number, max: number): string {
       >
         <div
           v-if="selectedCity"
-          class="city-detail-panel absolute top-3 left-3 z-20 w-[280px]"
+          class="city-detail-stack absolute top-3 left-3 z-20 w-[280px] flex flex-col gap-2"
         >
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="font-mono text-[11.5px] uppercase tracking-[0.2em] text-ink font-bold">{{ selectedCity }}</h3>
-            <button
-              class="font-mono text-[9.5px] text-ink-faint hover:text-ink transition-colors cursor-pointer"
-              @click="closeCityDetail"
-            >&times; close</button>
-          </div>
-
-          <template v-if="cityDetailPending">
-            <div class="animate-pulse space-y-2">
-              <div class="h-3 w-3/4 bg-surface-ruled" />
-              <div class="h-3 w-1/2 bg-surface-ruled" />
-            </div>
-          </template>
-
-          <template v-else-if="cityDetail && cityDetail.count > 0">
-            <p class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-faint mb-3">
-              {{ cityDetail.count }} jobs with salary data
-            </p>
-
-            <div class="grid grid-cols-2 gap-x-4 gap-y-3 mb-4">
-              <div>
-                <p class="font-mono text-[14.5px] font-bold text-ink">{{ formatSalary(cityDetail.medianLow) }}&ndash;{{ formatSalary(cityDetail.medianHigh) }}</p>
-                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Median range</p>
-              </div>
-              <div>
-                <p class="font-mono text-[14.5px] font-bold text-ink">{{ formatSalary(cityDetail.avgLow) }}&ndash;{{ formatSalary(cityDetail.avgHigh) }}</p>
-                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Average range</p>
-              </div>
-              <div>
-                <p class="font-mono text-[12.5px] text-ink-light">{{ formatSalary(cityDetail.min) }}</p>
-                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Lowest</p>
-              </div>
-              <div>
-                <p class="font-mono text-[12.5px] text-ink-light">{{ formatSalary(cityDetail.max) }}</p>
-                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Highest</p>
-              </div>
+          <div class="city-detail-panel">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-mono text-[11.5px] uppercase tracking-[0.2em] text-ink font-bold">{{ selectedCity }}</h3>
+              <button
+                class="font-mono text-[9.5px] text-ink-faint hover:text-ink transition-colors cursor-pointer"
+                @click="closeCityDetail"
+              >&times; close</button>
             </div>
 
-            <div class="salary-distribution">
-              <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint mb-2">Distribution (EUR/year)</p>
-              <div class="space-y-[2px]">
-                <div
-                  v-for="(r, i) in cityDetail.ranges.slice(0, 20)"
-                  :key="i"
-                  class="salary-bar-row"
-                >
-                  <div
-                    class="salary-bar"
-                    :style="{
-                      left: `${(r.low / cityDetail.max) * 100}%`,
-                      width: `${((r.high - r.low) / cityDetail.max) * 100}%`,
-                    }"
-                  />
+            <template v-if="cityDetailPending && !cityDetail">
+              <div class="animate-pulse space-y-2">
+                <div class="h-3 w-3/4 bg-surface-ruled" />
+                <div class="h-3 w-1/2 bg-surface-ruled" />
+              </div>
+            </template>
+
+            <template v-else-if="cityDetail && cityDetail.count > 0">
+              <p class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-faint mb-3">
+                {{ cityDetail.count }} jobs with salary data
+              </p>
+
+              <div class="grid grid-cols-2 gap-x-4 gap-y-3 mb-4">
+                <div>
+                  <p class="font-mono text-[14.5px] font-bold text-ink">{{ formatSalary(cityDetail.medianLow) }}&ndash;{{ formatSalary(cityDetail.medianHigh) }}</p>
+                  <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Median range</p>
+                </div>
+                <div>
+                  <p class="font-mono text-[14.5px] font-bold text-ink">{{ formatSalary(cityDetail.avgLow) }}&ndash;{{ formatSalary(cityDetail.avgHigh) }}</p>
+                  <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Average range</p>
+                </div>
+                <div>
+                  <p class="font-mono text-[12.5px] text-ink-light">{{ formatSalary(cityDetail.min) }}</p>
+                  <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Lowest</p>
+                </div>
+                <div>
+                  <p class="font-mono text-[12.5px] text-ink-light">{{ formatSalary(cityDetail.max) }}</p>
+                  <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Highest</p>
                 </div>
               </div>
-              <div class="flex justify-between mt-1">
-                <span class="font-mono text-[7.5px] text-ink-ghost">0k</span>
-                <span class="font-mono text-[7.5px] text-ink-ghost">{{ formatSalary(cityDetail.max) }}</span>
+
+              <div class="salary-distribution">
+                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint mb-2">Distribution (EUR/year)</p>
+                <div class="space-y-[2px]">
+                  <div
+                    v-for="(r, i) in cityDetail.ranges.slice(0, 20)"
+                    :key="i"
+                    class="salary-bar-row"
+                  >
+                    <div
+                      class="salary-bar"
+                      :style="{
+                        left: `${(r.low / cityDetail.max) * 100}%`,
+                        width: `${((r.high - r.low) / cityDetail.max) * 100}%`,
+                      }"
+                    />
+                  </div>
+                </div>
+                <div class="flex justify-between mt-1">
+                  <span class="font-mono text-[7.5px] text-ink-ghost">0k</span>
+                  <span class="font-mono text-[7.5px] text-ink-ghost">{{ formatSalary(cityDetail.max) }}</span>
+                </div>
+              </div>
+            </template>
+
+            <template v-else>
+              <p class="font-mono text-[9.5px] text-ink-faint">No salary data available for this city.</p>
+            </template>
+          </div>
+
+          <!-- Swipeable per-job card: one job at a time, prev/next arrows.
+               Stays mounted across city switches as long as some data is
+               available; content is replaced reactively when the fetch
+               settles. -->
+          <div
+            v-if="currentJob"
+            class="city-detail-panel city-job-card"
+          >
+            <div class="flex items-center justify-between mb-3">
+              <p class="font-mono text-[8.5px] uppercase tracking-[0.2em] text-ink-faint">
+                Job <span class="text-ink tabular-nums">{{ currentJobIndex + 1 }}</span>
+                <span class="text-ink-ghost"> / </span>
+                <span class="tabular-nums">{{ jobsWithSalary.length }}</span>
+              </p>
+              <div class="flex items-center gap-1">
+                <button
+                  class="city-job-nav"
+                  :disabled="currentJobIndex === 0"
+                  :aria-label="'Previous job'"
+                  @click="prevJob"
+                >
+                  <svg viewBox="0 0 16 16" class="w-3 h-3" aria-hidden="true">
+                    <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" />
+                  </svg>
+                </button>
+                <button
+                  class="city-job-nav"
+                  :disabled="currentJobIndex >= jobsWithSalary.length - 1"
+                  :aria-label="'Next job'"
+                  @click="nextJob"
+                >
+                  <svg viewBox="0 0 16 16" class="w-3 h-3" aria-hidden="true">
+                    <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" />
+                  </svg>
+                </button>
               </div>
             </div>
-          </template>
 
-          <template v-else>
-            <p class="font-mono text-[9.5px] text-ink-faint">No salary data available for this city.</p>
-          </template>
+            <p class="font-mono text-[11.5px] text-ink font-bold leading-snug mb-1 break-words">
+              <a
+                v-if="currentJob.url"
+                :href="currentJob.url"
+                target="_blank"
+                rel="noopener"
+                class="hover:text-accent transition-colors"
+              >{{ currentJob.title }}</a>
+              <span v-else>{{ currentJob.title }}</span>
+            </p>
+            <p class="font-mono text-[9.5px] text-ink-light mb-3 truncate">{{ currentJob.company }}</p>
+
+            <div class="flex items-baseline justify-between mb-2">
+              <p class="font-mono text-[14.5px] font-bold text-ink">
+                {{ formatSalary(currentJob.low) }}&ndash;{{ formatSalary(currentJob.high) }}
+              </p>
+              <span
+                v-if="currentJob.category && currentJob.category !== 'Other'"
+                class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint"
+              >{{ currentJob.category }}</span>
+            </div>
+
+            <div class="salary-bar-row">
+              <div
+                class="salary-bar"
+                :style="{
+                  left: `${(currentJob.low / cityDetail.max) * 100}%`,
+                  width: `${((currentJob.high - currentJob.low) / cityDetail.max) * 100}%`,
+                }"
+              />
+            </div>
+            <div class="flex justify-between mt-1">
+              <span class="font-mono text-[7.5px] text-ink-ghost">0k</span>
+              <span class="font-mono text-[7.5px] text-ink-ghost">{{ formatSalary(cityDetail.max) }}</span>
+            </div>
+          </div>
         </div>
       </Transition>
 
@@ -502,7 +577,7 @@ function pct(value: number, max: number): string {
           </p>
         </div>
       </template>
-      <template v-else>
+      <template v-else-if="viewportMode === 'graph'">
         <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
           <p class="font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
             knowledge.mechanism // schematic
@@ -511,6 +586,18 @@ function pct(value: number, max: number): string {
         <div class="absolute top-2 left-3 z-10 pointer-events-none">
           <p class="status-flicker font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
             viewport.2d
+          </p>
+        </div>
+      </template>
+      <template v-else>
+        <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
+          <p class="font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
+            growth.timeseries // telemetry
+          </p>
+        </div>
+        <div class="absolute top-2 left-3 z-10 pointer-events-none">
+          <p class="status-flicker font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
+            viewport.data
           </p>
         </div>
       </template>
@@ -656,17 +743,21 @@ function pct(value: number, max: number): string {
               <td class="py-1.5 align-top">
                 <span class="text-[11.5px] text-ink-light group-hover:text-ink transition-colors inline-flex items-center gap-1.5 truncate max-w-[280px]">
                   {{ company.company }}
-                  <span
+                  <button
                     v-if="company.description"
-                    class="shrink-0 cursor-help"
+                    type="button"
+                    data-company-info
+                    class="shrink-0 cursor-help -m-2 p-2 inline-flex items-center justify-center"
+                    aria-label="Show company description"
                     @mouseenter="showCompanyTooltip($event, company.description)"
                     @mouseleave="hideCompanyTooltip"
+                    @click.stop="toggleCompanyTooltip($event, company.description)"
                   >
                     <svg class="w-3 h-3 text-ink-ghost group-hover:text-ink-faint transition-colors" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                       <circle cx="8" cy="8" r="6.5" />
                       <path d="M8 7v4M8 5.5v0" stroke-linecap="round" />
                     </svg>
-                  </span>
+                  </button>
                   <svg v-else class="w-3 h-3 text-ink-ghost/30 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                     <circle cx="8" cy="8" r="6.5" />
                     <path d="M8 7v4M8 5.5v0" stroke-linecap="round" />
@@ -729,8 +820,8 @@ function pct(value: number, max: number): string {
 <style scoped>
 .dash {
   display: grid;
-  grid-template-columns: 220px 1fr 260px;
-  grid-template-rows: 90px minmax(450px, 1fr) auto auto;
+  grid-template-columns: 242px 1fr 286px;
+  grid-template-rows: 90px minmax(600px, 1fr) auto auto;
   gap: 6px;
   padding: 0 16px;
   width: 100vw;
@@ -784,6 +875,21 @@ function pct(value: number, max: number): string {
   padding: 14px 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
+
+/* Let clicks pass through the panel surface to the 3D canvas behind it,
+   so cities that project beneath the panel (NW Germany) stay clickable
+   while the panel is open. Only interactive elements catch events.
+   The !important on the auto rule is intentional: the universal-selector
+   .none rule above otherwise wins specificity and renders buttons inert. */
+.city-detail-stack,
+.city-detail-stack .city-detail-panel,
+.city-detail-stack .city-detail-panel * {
+  pointer-events: none;
+}
+.city-detail-stack button,
+.city-detail-stack a {
+  pointer-events: auto !important;
+}
 .salary-bar-row {
   position: relative;
   height: 4px;
@@ -799,85 +905,28 @@ function pct(value: number, max: number): string {
   border-radius: 1px;
 }
 
-/* ── SYS.overview · scrape-today block ──────────────────────────── */
-.scrape-today {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--color-ink-ghost);
-  /* Faint registration tick at the top-left of the divider — keeps
-     the schematic-blueprint vocabulary going. */
-  position: relative;
-}
-.scrape-today::before {
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: 0;
-  width: 14px;
-  height: 1px;
-  background: var(--color-ink);
-}
-.scrape-today__header {
-  font-family: var(--font-mono);
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--color-ink-faint);
-  margin-bottom: 10px;
-}
-.scrape-today__metrics {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-}
-.scrape-today__metric {
+/* Per-job card nav (prev/next arrows) — same monochrome register
+   as the fullscreen + viewport-toggle buttons. */
+.city-job-nav {
   display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  font-family: var(--font-mono);
-  color: var(--color-ink-light);
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-ink-ghost);
+  background: var(--color-surface);
+  color: var(--color-ink-faint);
+  cursor: pointer;
+  transition: color 160ms ease-out, background 160ms ease-out, border-color 160ms ease-out;
 }
-.scrape-today__sign {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--color-accent);
-  margin-right: 1px;
-}
-.scrape-today__count {
-  font-size: 18.5px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
+.city-job-nav:hover:not(:disabled) {
   color: var(--color-ink);
+  border-color: var(--color-ink);
 }
-.scrape-today__metric--primary .scrape-today__count {
-  color: var(--color-accent);
-}
-.scrape-today__unit {
-  font-size: 8.5px;
-  font-weight: 500;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--color-ink-faint);
-}
-.scrape-today__footer {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 10px;
-  font-family: var(--font-mono);
-  font-size: 8.5px;
-  letter-spacing: 0.12em;
-}
-.scrape-today__footer-label {
-  text-transform: uppercase;
-  color: var(--color-ink-ghost);
-}
-.scrape-today__footer-value {
-  color: var(--color-ink-faint);
-  font-variant-numeric: tabular-nums;
+.city-job-nav:disabled {
+  opacity: 0.25;
+  cursor: default;
 }
 
 /* Teleport target — a zero-size container that lives inside the
@@ -968,7 +1017,7 @@ function pct(value: number, max: number): string {
   .dash-header     { grid-column: 1 / -1; grid-row: 1; }
   .dash-stats      { grid-column: 1; grid-row: 2; }
   .dash-categories { grid-column: 2; grid-row: 2; }
-  .dash-viewport   { grid-column: 1 / -1; grid-row: 3; min-height: 400px; }
+  .dash-viewport   { grid-column: 1 / -1; grid-row: 3; min-height: 460px; }
   .dash-cities     { grid-column: 1; grid-row: 4; }
   .dash-companies  { grid-column: 2; grid-row: 4; }
   .dash-levels     { grid-column: 1 / -1; grid-row: 5; }
@@ -1005,7 +1054,7 @@ function pct(value: number, max: number): string {
     grid-column: 1;
     grid-row: auto;
   }
-  .dash-viewport { min-height: 300px; }
+  .dash-viewport { min-height: 360px; }
 }
 </style>
 

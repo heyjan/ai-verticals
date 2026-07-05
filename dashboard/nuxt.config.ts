@@ -4,7 +4,12 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-05-11',
   modules: [
     '@tresjs/nuxt',
+    'nuxt-auth-utils',
   ],
+  // Enable WebAuthn (passkey) server handlers + `useWebAuthn()` composable.
+  auth: {
+    webAuthn: true,
+  },
   components: [
     { path: '~/components', pathPrefix: false },
   ],
@@ -35,5 +40,24 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     databaseUrl: process.env.DATABASE_URL,
+    // Encrypts the sealed session cookie. Override with NUXT_SESSION_PASSWORD
+    // (>= 32 chars) in every non-dev environment; auth-utils auto-generates an
+    // ephemeral one in dev if unset.
+    session: {
+      // Empty by design: bound at runtime from NUXT_SESSION_PASSWORD (and
+      // auto-generated in dev when unset). Never commit a real value here.
+      password: '',
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+    },
+    // OAuth client credentials. Values are intentionally empty here and bound
+    // at runtime from NUXT_OAUTH_<PROVIDER>_CLIENT_ID / _CLIENT_SECRET
+    // (and optional _REDIRECT_URL). Keeping the keys declared makes the env
+    // override work in the built Nitro server.
+    oauth: {
+      github: { clientId: '', clientSecret: '' },
+      google: { clientId: '', clientSecret: '' },
+      x: { clientId: '', clientSecret: '' },
+      linkedin: { clientId: '', clientSecret: '' },
+    },
   },
 })

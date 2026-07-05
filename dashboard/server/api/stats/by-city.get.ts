@@ -6,7 +6,7 @@
  */
 
 import { jobs } from '@ai-job-classifier/db'
-import { and, count, isNotNull, ne, sql } from 'drizzle-orm'
+import { and, count, eq, isNotNull, ne, sql } from 'drizzle-orm'
 
 import { db } from '../../utils/db'
 
@@ -150,7 +150,7 @@ export default defineEventHandler(async () => {
   const rows = await db
     .select({ city: jobs.city, count: count() })
     .from(jobs)
-    .where(and(isNotNull(jobs.city), ne(jobs.city, '')))
+    .where(and(eq(jobs.active, true), isNotNull(jobs.city), ne(jobs.city, '')))
     .groupBy(jobs.city)
     .orderBy(sql`count(*) DESC`)
 

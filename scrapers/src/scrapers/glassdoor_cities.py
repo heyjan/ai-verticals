@@ -1,67 +1,72 @@
 #!/usr/bin/env python3
 """City-targeted Glassdoor scraper.
 
-Searches AI jobs per city instead of country-wide "Deutschland".
-Discovers Glassdoor city IDs via autocomplete, then runs BFF queries
-scoped to each city. Logs how many new entries each city yields
-compared to the existing generic scrape data.
+Uses CloakBrowser (stealth Chromium) to bypass Glassdoor's Cloudflare
+Managed Challenge. Each city gets a fresh browser context with a random
+desktop User-Agent so the request stream looks like 60+ different users
+rather than one persistent session.
 
 Usage:
-    python scrape_glassdoor_cities.py --existing-json data/glassdoor_jobs_20260510_231012.json
-    python scrape_glassdoor_cities.py --cities ulm stuttgart münchen --max-per-city 200
+    python -m scrapers.glassdoor_cities --cities Berlin --max-per-city 50
+    python -m scrapers.glassdoor_cities --existing-json data/glassdoor_jobs_20260510_231012.json
 """
 
 import json
+import os
 import time
 import random
 import argparse
 import csv
 from pathlib import Path
 from datetime import datetime
-from collections import defaultdict
 
-from curl_cffi import requests as curl_requests
+from cloakbrowser import launch
 
+from ._cities import COUNTRYWIDE, KEYWORDS, TARGET_CITIES
 from ._progress import ProgressLog
 
-
-KEYWORDS = [
-    "artificial intelligence",
-    "AI",
-    "Data & AI",
-    "Künstliche Intelligenz",
-    "NLP natural language processing",
-    "computer vision",
-    "data scientist AI",
-    "generative AI LLM",
+# Rotating identity pool — 30 (brand, brand_version) tuples driving
+# CloakBrowser's --fingerprint-brand and --fingerprint-brand-version
+# flags. Setting these via flags (not via new_context's user_agent kwarg)
+# is critical: cloakbrowser keeps UA string AND Sec-CH-UA-* Client Hints
+# in sync from those flags. Overriding user_agent alone produced a UA/CH
+# mismatch that Cloudflare flagged on every run.
+BRAND_FINGERPRINTS = [
+    ("Chrome", "146.0.7680.177"),
+    ("Chrome", "146.0.7680.139"),
+    ("Chrome", "146.0.7680.94"),
+    ("Chrome", "146.0.7680.61"),
+    ("Chrome", "146.0.7680.32"),
+    ("Chrome", "145.0.7503.119"),
+    ("Chrome", "145.0.7503.94"),
+    ("Chrome", "145.0.7503.71"),
+    ("Chrome", "145.0.7503.41"),
+    ("Chrome", "145.0.7503.16"),
+    ("Chrome", "144.0.6900.117"),
+    ("Chrome", "144.0.6900.88"),
+    ("Chrome", "144.0.6900.59"),
+    ("Chrome", "144.0.6900.31"),
+    ("Chrome", "144.0.6900.13"),
+    ("Chrome", "143.0.6717.140"),
+    ("Chrome", "143.0.6717.92"),
+    ("Chrome", "143.0.6717.51"),
+    ("Chrome", "143.0.6717.27"),
+    ("Chrome", "142.0.6604.130"),
+    ("Chrome", "142.0.6604.84"),
+    ("Chrome", "142.0.6604.51"),
+    ("Edge",   "146.0.2700.94"),
+    ("Edge",   "146.0.2700.74"),
+    ("Edge",   "146.0.2700.52"),
+    ("Edge",   "145.0.2614.117"),
+    ("Edge",   "145.0.2614.79"),
+    ("Edge",   "144.0.2532.94"),
+    ("Edge",   "144.0.2532.56"),
+    ("Edge",   "143.0.2454.85"),
 ]
 
-# Sentinel for the country-wide search. The scraper looks up the
-# Glassdoor "Nation" location id (locationType "N") instead of a city.
-COUNTRYWIDE = "Deutschland"
-
-# Single flat list — same shape as the LinkedIn scraper so a merged
-# dataset has consistent geographic coverage across both sources.
-TARGET_CITIES = [
-    COUNTRYWIDE,
-    # Top metro areas
-    "Berlin", "Hamburg", "München", "Köln", "Frankfurt am Main",
-    "Stuttgart", "Düsseldorf", "Leipzig", "Dortmund", "Essen",
-    "Bremen", "Dresden", "Hannover",
-    # Bavaria / Baden-Württemberg tech hubs
-    "Ulm", "Augsburg", "Böblingen", "Karlsruhe", "Heidelberg", "Mannheim",
-    "Darmstadt", "Freiburg", "Heilbronn", "Nürnberg", "Erlangen",
-    "Herzogenaurach", "Ditzingen", "Renningen", "Immenstaad", "Kitzingen",
-    "Ingolstadt", "Regensburg", "Sindelfingen", "Friedrichshafen",
-    "Ottobrunn", "Tübingen", "Konstanz", "Würzburg",
-    # Rhein/Ruhr + central
-    "Wiesbaden", "Mörfelden-Walldorf", "Mainz", "Bonn", "Aachen",
-    "Bochum", "Duisburg", "Saarbrücken", "Koblenz", "Göttingen",
-    "Bielefeld", "Münster", "Paderborn",
-    # North + East
-    "Wolfsburg", "Braunschweig", "Kiel", "Lübeck", "Rostock", "Potsdam",
-    "Erfurt", "Jena", "Magdeburg", "Halle", "Chemnitz",
-]
+assert len(BRAND_FINGERPRINTS) == 30, (
+    f"BRAND_FINGERPRINTS must have 30 entries (got {len(BRAND_FINGERPRINTS)})"
+)
 
 
 class CityGlassdoorScraper:
@@ -72,53 +77,182 @@ class CityGlassdoorScraper:
 
     def __init__(self, delay_range=(2.5, 5.0)):
         self.delay_range = delay_range
-        self.session = curl_requests.Session(impersonate="chrome")
-        self.session.headers.update({
-            "Origin": self.BASE_URL,
-            "Referer": f"{self.BASE_URL}/",
-            "Accept": "*/*",
-            "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-        })
         self.city_id_cache: dict[str, dict] = {}
+        self.browser = None
+        self.context = None
+        self.page = None
+        self.user_agent: str | None = None
+
+    def _open_browser(self):
+        self._close_browser()
+        # Rotate identity via `--fingerprint=<seed>` only. Don't override
+        # brand or brand_version — cloakbrowser's binary is Chrome 146,
+        # and forcing a different UA/Client-Hints version creates a
+        # mismatch with the actual TLS handshake that Cloudflare detects.
+        # The seed alone deterministically rotates GPU, canvas, WebGL,
+        # audio, fonts, and screen dimensions — 89000+ unique identities.
+        fingerprint_seed = random.randint(10000, 99999)
+        self.user_agent = f"seed={fingerprint_seed}"  # for log only
+
+        # GLASSDOOR_PROXY_URL is mandatory in practice: Cloudflare scores
+        # this server's datacenter IP too low to clear the managed
+        # challenge regardless of browser stealth. Set to a residential
+        # SOCKS5/HTTP proxy in .env. Empty/unset → direct (will 403).
+        proxy_url = os.environ.get("GLASSDOOR_PROXY_URL", "").strip()
+        launch_kwargs = {
+            "humanize": True,
+            "args": [f"--fingerprint={fingerprint_seed}"],
+        }
+        if proxy_url:
+            # geoip=True auto-aligns timezone/locale to the proxy exit IP
+            # and injects --fingerprint-webrtc-ip to prevent WebRTC leaks.
+            launch_kwargs["proxy"] = proxy_url
+            launch_kwargs["geoip"] = True
+        self.browser = launch(**launch_kwargs)
+        self.context = self.browser.new_context(
+            locale="de-DE",
+            timezone_id="Europe/Berlin",
+            viewport={"width": 1920, "height": 1080},
+        )
+        self.page = self.context.new_page()
+
+    def _close_browser(self):
+        for obj_attr in ("context", "browser"):
+            obj = getattr(self, obj_attr, None)
+            if obj is not None:
+                try:
+                    obj.close()
+                except Exception:
+                    pass
+            setattr(self, obj_attr, None)
+        self.page = None
+
+    # Cloudflare challenge / mid-flight page titles. Match in lowercase.
+    # German + English forms cover glassdoor.de's localized challenges.
+    CHALLENGE_TITLE_TOKENS = (
+        "just a moment", "nur einen moment", "einen moment",
+        "security", "sicherheits",
+        "attention required", "ddos",
+        "checking your browser",
+    )
+
+    def _on_challenge_page(self) -> bool:
+        title = (self.page.title() or "").lower()
+        return any(tok in title for tok in self.CHALLENGE_TITLE_TOKENS)
 
     def init_session(self):
-        print("Initializing session (visiting homepage)...")
-        resp = self.session.get(self.BASE_URL, timeout=15)
-        if resp.status_code != 200:
-            raise RuntimeError(f"Failed to init session: HTTP {resp.status_code}")
-        print(f"Session initialized. Cookies: {list(self.session.cookies.keys())}")
+        """Open a fresh browser and load the homepage so CloakBrowser
+        passes any Cloudflare challenge and banks clearance cookies. A
+        fresh browser per call also rotates the User-Agent.
+
+        Cloudflare's Managed Challenge serves the JS challenge first and
+        only swaps in the real content once the JS resolves and a
+        `cf_clearance` cookie is granted. We poll the title for up to
+        45s waiting for that swap.
+        """
+        self._open_browser()
+        ua_tail = self.user_agent.split(" ")[-1] if self.user_agent else "?"
+        proxy_indicator = "via proxy" if os.environ.get("GLASSDOOR_PROXY_URL", "").strip() else "DIRECT (likely 403)"
+        print(f"Initializing browser session (UA tail: {ua_tail}, {proxy_indicator})")
+        self.page.goto(
+            self.BASE_URL,
+            wait_until="load",
+            timeout=60_000,
+        )
+
+        # With a residential proxy, cloakbrowser auto-resolves Cloudflare's
+        # managed challenge in ~5-10s. Just wait — calling
+        # `turnstile.reset()` or clicking the iframe interrupts the
+        # auto-resolve and the challenge never completes.
+        deadline = time.monotonic() + 45.0
+        while self._on_challenge_page() and time.monotonic() < deadline:
+            time.sleep(1.5)
+            try:
+                self.page.wait_for_load_state("networkidle", timeout=2_000)
+            except Exception:
+                pass
+
+        title = self.page.title()
+        url = self.page.url
+        cookies = self.context.cookies()
+        cookie_names = [c["name"] for c in cookies]
+        cf_cleared = any(c["name"] == "cf_clearance" for c in cookies)
+
+        if self._on_challenge_page() or not cf_cleared:
+            body_sample = (self.page.content() or "")[:300]
+            raise RuntimeError(
+                f"Cloudflare challenge not cleared. title={title!r} "
+                f"url={url!r} cf_clearance={cf_cleared} "
+                f"cookies={cookie_names} body_head={body_sample!r}"
+            )
+
+        print(f"Session initialized. title={title!r} cookies={cookie_names}")
+
+    def _browser_fetch(self, url: str, *, method: str = "GET", body: dict | None = None,
+                       extra_headers: dict | None = None, timeout_ms: int = 20_000) -> dict:
+        """Run fetch() inside the page so the request carries the real
+        browser's UA, Client Hints, Sec-Fetch-*, cookies (incl.
+        cf_clearance), and TLS fingerprint. Returns {status, body_text}.
+        Glassdoor's BFF rejects requests from page.request.* because the
+        Sec-Fetch-Site / Sec-Fetch-Mode headers don't match an in-page
+        XHR, even though the cookies are shared.
+        """
+        js_args = {
+            "url": url,
+            "method": method,
+            "body": json.dumps(body) if body is not None else None,
+            "extraHeaders": extra_headers or {},
+            "timeoutMs": timeout_ms,
+        }
+        return self.page.evaluate(
+            """async ({url, method, body, extraHeaders, timeoutMs}) => {
+                const ctrl = new AbortController();
+                const t = setTimeout(() => ctrl.abort(), timeoutMs);
+                try {
+                    const r = await fetch(url, {
+                        method,
+                        body,
+                        credentials: 'include',
+                        headers: {
+                            'Accept': '*/*',
+                            ...(body ? {'Content-Type': 'application/json'} : {}),
+                            ...extraHeaders,
+                        },
+                        signal: ctrl.signal,
+                    });
+                    const text = await r.text();
+                    return {status: r.status, body: text};
+                } finally {
+                    clearTimeout(t);
+                }
+            }""",
+            js_args,
+        )
 
     def lookup_city_id(self, city_name: str) -> dict | None:
-        """Look up the Glassdoor location id for a city or for the
-        Deutschland-wide sentinel via autocomplete.
+        """Look up the Glassdoor location id via autocomplete.
 
         Returns None on timeout / network error rather than raising —
-        Glassdoor's anti-bot throttle starts dropping connections rather
-        than returning errors, and a single timed-out city should not
-        crash the whole scrape.
+        Glassdoor's anti-bot throttle starts dropping connections, and a
+        single timed-out city should not crash the whole scrape.
         """
         if city_name in self.city_id_cache:
             return self.city_id_cache[city_name]
 
+        from urllib.parse import urlencode
+        qs = urlencode({"term": city_name, "maxLocationsToReturn": 5})
         try:
-            resp = self.session.get(
-                self.LOCATION_URL,
-                params={"term": city_name, "maxLocationsToReturn": 5},
-                timeout=20,
-            )
+            resp = self._browser_fetch(f"{self.LOCATION_URL}?{qs}")
         except Exception as e:
             print(f"  Location lookup network error for '{city_name}': {e}")
             return None
 
-        if resp.status_code != 200:
-            print(f"  Location lookup failed for '{city_name}': HTTP {resp.status_code}")
+        if resp["status"] != 200:
+            print(f"  Location lookup failed for '{city_name}': HTTP {resp['status']}")
             return None
 
         try:
-            results = resp.json()
+            results = json.loads(resp["body"])
         except Exception as e:
             print(f"  Location lookup parse error for '{city_name}': {e}")
             return None
@@ -214,22 +348,35 @@ class CityGlassdoorScraper:
         }
 
         for attempt in range(3):
-            resp = self.session.post(self.SEARCH_URL, json=payload, timeout=15)
-            if resp.status_code == 200:
-                return resp.json()
-            if resp.status_code in (502, 503, 429) and attempt < 2:
+            try:
+                resp = self._browser_fetch(
+                    self.SEARCH_URL,
+                    method="POST",
+                    body=payload,
+                    timeout_ms=15_000,
+                )
+            except Exception as e:
+                if attempt < 2:
+                    wait = (attempt + 1) * 5 + random.uniform(1, 3)
+                    print(f"    Network error, retrying in {wait:.0f}s: {e}")
+                    time.sleep(wait)
+                    continue
+                raise
+            if resp["status"] == 200:
+                return json.loads(resp["body"])
+            if resp["status"] in (502, 503, 429, 403) and attempt < 2:
                 wait = (attempt + 1) * 5 + random.uniform(1, 3)
-                print(f"    HTTP {resp.status_code}, retrying in {wait:.0f}s...")
+                print(f"    HTTP {resp['status']}, retrying in {wait:.0f}s...")
                 time.sleep(wait)
                 continue
-            raise RuntimeError(f"Search failed: HTTP {resp.status_code}")
+            raise RuntimeError(f"Search failed: HTTP {resp['status']}")
 
     def search_city_keyword(
         self, keyword: str, city_name: str, city_id: int, max_jobs: int = 500,
         location_type: str = "CITY",
     ) -> list[dict]:
-        jobs = []
-        cursor = None
+        jobs: list[dict] = []
+        cursor: str | None = None
         page = 1
 
         while len(jobs) < max_jobs:
@@ -238,6 +385,7 @@ class CityGlassdoorScraper:
             except Exception as e:
                 print(f"    Error on page {page}: {e}")
                 try:
+                    # Re-warm the session with a fresh browser/UA, then retry the page once.
                     self.init_session()
                     time.sleep(random.uniform(3, 6))
                     data = self._search_page(keyword, city_name, city_id, page, cursor, location_type)
@@ -271,8 +419,9 @@ class CityGlassdoorScraper:
         self, city_name: str, existing_ids: set[str],
         max_per_city: int = 200,
     ) -> dict:
-        """Scrape all keywords for one location (city or the country
-        sentinel). Returns stats + new jobs."""
+        """Scrape all keywords for one location. Caller is expected to
+        have called init_session() to open a fresh browser for this
+        city (giving it a fresh UA + cookies)."""
         city_info = self.lookup_city_id(city_name)
         if not city_info:
             return {"city": city_name, "error": "location lookup failed", "jobs": []}
@@ -337,6 +486,9 @@ class CityGlassdoorScraper:
         print(f"    Duplicates:             {stats['duplicates']}")
 
         return {"stats": stats, "jobs": all_jobs}
+
+    def close(self):
+        self._close_browser()
 
 
 def flatten_job(job: dict) -> dict:
@@ -433,7 +585,7 @@ def save_results(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="City-targeted Glassdoor AI job scraper"
+        description="City-targeted Glassdoor AI job scraper (CloakBrowser)"
     )
     parser.add_argument(
         "--existing-json", type=str, default=None,
@@ -444,8 +596,8 @@ def main():
         help="Specific cities to scrape (default: all TARGET_CITIES)",
     )
     parser.add_argument(
-        "--max-per-city", type=int, default=200,
-        help="Max jobs per city (default: 200)",
+        "--max-per-city", type=int, default=150,
+        help="Max jobs per city (default: 150)",
     )
     parser.add_argument(
         "--output-dir", type=str, default="data/raw",
@@ -473,38 +625,43 @@ def main():
     progress.start(cities, args.max_per_city)
 
     scraper = CityGlassdoorScraper(delay_range=(args.delay_min, args.delay_max))
-    scraper.init_session()
 
     all_jobs: list[dict] = []
     all_stats: list[dict] = []
     global_seen: set[str] = set()
 
-    for idx, city in enumerate(cities, start=1):
-        progress.city_start(city, idx, len(cities))
-        try:
-            result = scraper.scrape_city(city, existing_ids, max_per_city=args.max_per_city)
-        except Exception as e:
-            all_stats.append({"city": city, "error": str(e)})
-            progress.city_error(city, idx, len(cities), str(e))
-            continue
+    try:
+        for idx, city in enumerate(cities, start=1):
+            progress.city_start(city, idx, len(cities))
+            # Fresh browser + UA per city; previous context (if any) is
+            # closed inside init_session().
+            try:
+                scraper.init_session()
+                result = scraper.scrape_city(city, existing_ids, max_per_city=args.max_per_city)
+            except Exception as e:
+                all_stats.append({"city": city, "error": str(e)})
+                progress.city_error(city, idx, len(cities), str(e))
+                continue
 
-        if "error" in result:
-            all_stats.append({"city": city, "error": result["error"]})
-            progress.city_error(city, idx, len(cities), result["error"])
-            continue
+            if "error" in result:
+                all_stats.append({"city": city, "error": result["error"]})
+                progress.city_error(city, idx, len(cities), result["error"])
+                continue
 
-        # Deduplicate across cities
-        for job in result["jobs"]:
-            lid = str(job.get("jobview", {}).get("job", {}).get("listingId", ""))
-            if lid and lid not in global_seen:
-                global_seen.add(lid)
-                all_jobs.append(job)
+            # Deduplicate across cities
+            for job in result["jobs"]:
+                lid = str(job.get("jobview", {}).get("job", {}).get("listingId", ""))
+                if lid and lid not in global_seen:
+                    global_seen.add(lid)
+                    all_jobs.append(job)
 
-        all_stats.append(result["stats"])
-        progress.city_done(city, idx, len(cities), result["stats"])
-        # Longer cool-down between cities to stay under Glassdoor's
-        # per-IP request-rate threshold. (Default ~12s.)
-        time.sleep(random.uniform(8.0, 15.0))
+            all_stats.append(result["stats"])
+            progress.city_done(city, idx, len(cities), result["stats"])
+            # Longer cool-down between cities to stay under Glassdoor's
+            # per-IP request-rate threshold. (Default ~12s.)
+            time.sleep(random.uniform(8.0, 15.0))
+    finally:
+        scraper.close()
 
     progress.finished({"jobs": len(all_jobs), "cities": len(cities)})
 

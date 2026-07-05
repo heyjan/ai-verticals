@@ -472,6 +472,34 @@ const cardinalLabels = computed(() =>
     }
   }),
 )
+
+// ── Tool ranking for the engaged cohort ───────────────────────────────────
+// When a cohort is hovered or focused, list its linked centre-tools ranked by
+// how many jobs connect them (co-occurrence weight summed across the cohort's
+// sub-segments). Answers "which tools are these arcs pointing to, and which
+// matter most" without needing to hover each centre dot.
+const activeCohort = computed<CohortView | null>(() => {
+  const id = focusedCohortId.value ?? hoveredId.value
+  if (!id) return null
+  return layout.value.cohorts.find((c) => c.id === id) ?? null
+})
+
+const TOOLLIST_LIMIT = 12
+
+const activeCohortTools = computed(() => {
+  const c = activeCohort.value
+  if (!c) return []
+  const subIds = new Set(c.subs.map((s) => s.id))
+  const weightByTool = new Map<string, number>()
+  for (const e of props.data.edges) {
+    if (e.kind !== 'cooccurrence' || !subIds.has(e.source)) continue
+    weightByTool.set(e.target, (weightByTool.get(e.target) ?? 0) + e.weight)
+  }
+  const labelById = new Map(layout.value.toolViews.map((t) => [t.id, t.label]))
+  return [...weightByTool.entries()]
+    .map(([id, weight]) => ({ id, label: labelById.get(id) ?? id, weight }))
+    .sort((a, b) => b.weight - a.weight)
+})
 </script>
 
 <template>
@@ -662,6 +690,7 @@ const cardinalLabels = computed(() =>
           class="kg-label-group"
           :class="{
             'kg-label-group--primary': isPrimary(c.id),
+            'kg-label-group--focused': focusedCohortId === c.id,
             'kg-label-group--dim': isDim(c.id),
           }"
         >
@@ -697,6 +726,30 @@ const cardinalLabels = computed(() =>
         <text x="0" y="0" class="kg-legend-meta">drag · scroll disabled · click cohort to focus</text>
       </g>
     </svg>
+
+    <!-- Tool ranking for the engaged cohort — sits in the empty top-left
+         corner (outside the circular ring) so it never covers the graph. -->
+    <Transition name="kg-toollist">
+      <div v-if="activeCohort && activeCohortTools.length" class="kg-toollist">
+        <div class="kg-toollist-head">
+          <span class="kg-toollist-eyebrow">Tools · Skills</span>
+          <span class="kg-toollist-cohort">{{ activeCohort.label }}</span>
+        </div>
+        <ul class="kg-toollist-items">
+          <li
+            v-for="t in activeCohortTools.slice(0, TOOLLIST_LIMIT)"
+            :key="t.id"
+            class="kg-toollist-item"
+          >
+            <span class="kg-toollist-label">{{ t.label }}</span>
+            <span class="kg-toollist-count">{{ t.weight.toLocaleString('en-US') }}</span>
+          </li>
+        </ul>
+        <div v-if="activeCohortTools.length > TOOLLIST_LIMIT" class="kg-toollist-more">
+          +{{ activeCohortTools.length - TOOLLIST_LIMIT }} more
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -857,21 +910,29 @@ const cardinalLabels = computed(() =>
 .kg-cohort--dim { opacity: 0.16; }
 .kg-cohort--active .kg-cohort-disc { stroke-opacity: 0.85; }
 .kg-cohort--active .kg-cohort-centre { fill: var(--color-ink); }
+/* Hover emphasis stays monochrome — the warm-red accent is reserved for the
+   focal point (a clicked/focused cohort), so plain hover no longer reds. */
 .kg-cohort--primary .kg-cohort-disc {
-  stroke: var(--color-accent);
+  stroke: var(--color-ink);
   stroke-opacity: 1;
   stroke-width: 1.4;
 }
 .kg-cohort--primary .kg-cohort-centre {
-  fill: var(--color-accent);
-  stroke: var(--color-accent);
+  fill: var(--color-ink);
+  stroke: var(--color-ink);
 }
 .kg-cohort--primary .kg-cohort-orbit {
   stroke: var(--color-ink-faint);
   stroke-opacity: 0.8;
 }
 .kg-cohort--focused .kg-cohort-disc {
+  stroke: var(--color-accent);
+  stroke-opacity: 1;
   stroke-width: 1.6;
+}
+.kg-cohort--focused .kg-cohort-centre {
+  fill: var(--color-accent);
+  stroke: var(--color-accent);
 }
 .kg-cohort--unfocused {
   opacity: 0.12;
@@ -1001,8 +1062,10 @@ const cardinalLabels = computed(() =>
   fill: var(--color-ink-faint);
 }
 .kg-label-group--dim { opacity: 0.2; }
-.kg-label-group--primary .kg-label { fill: var(--color-accent); }
-.kg-label-group--primary .kg-label-count { fill: var(--color-accent); }
+/* Hover keeps the label in ink; only the focused cohort's label goes accent. */
+.kg-label-group--primary .kg-label { fill: var(--color-ink); }
+.kg-label-group--focused .kg-label { fill: var(--color-accent); }
+.kg-label-group--focused .kg-label-count { fill: var(--color-accent); }
 
 /* ── Corner legends ───────────────────────────────────────────────── */
 .kg-legend text {
@@ -1038,4 +1101,91 @@ const cardinalLabels = computed(() =>
 .kg-cohort:nth-child(11) { animation-delay: 480ms; }
 .kg-cohort:nth-child(12) { animation-delay: 520ms; }
 .kg-cohort:nth-child(13) { animation-delay: 560ms; }
+
+/* ── Cohort tool ranking box (top-left corner overlay) ────────────── */
+.kg-toollist {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  width: 190px;
+  padding: 9px 11px 10px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--color-ink-ghost);
+  pointer-events: none;
+}
+.kg-toollist-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 7px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-ink-ghost);
+}
+.kg-toollist-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}
+.kg-toollist-cohort {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-ink);
+}
+.kg-toollist-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.kg-toollist-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.kg-toollist-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--color-ink-light);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.kg-toollist-item:first-child .kg-toollist-label {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+.kg-toollist-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-faint);
+}
+.kg-toollist-more {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}
+.kg-toollist-enter-active,
+.kg-toollist-leave-active {
+  transition: opacity 180ms ease-out;
+}
+.kg-toollist-enter-from,
+.kg-toollist-leave-to {
+  opacity: 0;
+}
 </style>

@@ -3,7 +3,7 @@
  */
 
 import { companyDescriptions, jobs } from '@ai-job-classifier/db'
-import { count, eq, sql } from 'drizzle-orm'
+import { and, count, eq, sql } from 'drizzle-orm'
 
 import { db } from '../../utils/db'
 
@@ -39,6 +39,7 @@ export default defineEventHandler(async (event) => {
   const counts = await db
     .select({ company: jobs.company, count: count() })
     .from(jobs)
+    .where(eq(jobs.active, true))
     .groupBy(jobs.company)
     .orderBy(sql`count(*) DESC`)
 
@@ -57,7 +58,7 @@ export default defineEventHandler(async (event) => {
   const categoryRows = await db
     .selectDistinct({ company: jobs.company, category: jobs.category })
     .from(jobs)
-    .where(sql`${jobs.company} = ANY(${namesArr})`)
+    .where(and(eq(jobs.active, true), sql`${jobs.company} = ANY(${namesArr})`))
     .orderBy(jobs.category)
 
   const categoriesByCompany = new Map<string, string[]>()

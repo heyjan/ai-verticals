@@ -5,9 +5,11 @@ description = "LinkedIn + Glassdoor scrapers for the AI job classifier."
 requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4>=4.14.3",
+    "cloakbrowser[geoip]>=0.3.28",
     "curl-cffi>=0.15.0",
     "lxml>=6.1.0",
     "rapidfuzz>=3.14.5",
+    "scikit-learn>=1.5.0",
     "thefuzz>=0.22.1",
 ]
 

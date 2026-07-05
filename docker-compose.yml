@@ -41,16 +41,37 @@ services:
     build:
       context: .
       dockerfile: dashboard/Dockerfile
-    ports:
-      - "${DASHBOARD_PORT:-3000}:3000"
+    expose:
+      - "3000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://jobs:jobs@postgres:5432/jobs}
       HOST: 0.0.0.0
+      # Auth (nuxt-auth-utils). Values come from the gitignored root .env.
+      # Public origin is https so the OAuth redirect + secure session cookie
+      # resolve correctly behind Traefik.
+      NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD}
+      NUXT_OAUTH_GITHUB_CLIENT_ID: ${NUXT_OAUTH_GITHUB_CLIENT_ID:-}
+      NUXT_OAUTH_GITHUB_CLIENT_SECRET: ${NUXT_OAUTH_GITHUB_CLIENT_SECRET:-}
+      NUXT_OAUTH_GOOGLE_CLIENT_ID: ${NUXT_OAUTH_GOOGLE_CLIENT_ID:-}
+      NUXT_OAUTH_GOOGLE_CLIENT_SECRET: ${NUXT_OAUTH_GOOGLE_CLIENT_SECRET:-}
+      NUXT_OAUTH_X_CLIENT_ID: ${NUXT_OAUTH_X_CLIENT_ID:-}
+      NUXT_OAUTH_X_CLIENT_SECRET: ${NUXT_OAUTH_X_CLIENT_SECRET:-}
+      NUXT_OAUTH_LINKEDIN_CLIENT_ID: ${NUXT_OAUTH_LINKEDIN_CLIENT_ID:-}
+      NUXT_OAUTH_LINKEDIN_CLIENT_SECRET: ${NUXT_OAUTH_LINKEDIN_CLIENT_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
       seed:
         condition: service_completed_successfully
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.aiverticals.rule=Host(`ai-verticals.dev`) || Host(`www.ai-verticals.dev`)
+      - traefik.http.routers.aiverticals.entrypoints=websecure
+      - traefik.http.routers.aiverticals.tls.certresolver=letsencrypt
+      - traefik.http.services.aiverticals.loadbalancer.server.port=3000
+    networks:
+      - default
+      - proxy
 
   classifier-agent:
     build:
@@ -74,6 +95,10 @@ services:
         condition: service_healthy
       seed:
         condition: service_completed_successfully
+
+networks:
+  proxy:
+    external: true
 
 volumes:
   pg-data:

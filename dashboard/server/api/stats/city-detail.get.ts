@@ -5,7 +5,7 @@
  */
 
 import { jobs } from '@ai-job-classifier/db'
-import { and, ilike, like, sql } from 'drizzle-orm'
+import { and, eq, ilike, like, sql } from 'drizzle-orm'
 
 import { db } from '../../utils/db'
 
@@ -15,10 +15,17 @@ export default defineEventHandler(async (event) => {
   if (!city) return { error: 'city parameter required' }
 
   const rows = await db
-    .select({ salary: jobs.salary, title: jobs.title })
+    .select({
+      salary: jobs.salary,
+      title: jobs.title,
+      company: jobs.company,
+      url: jobs.url,
+      category: jobs.category,
+    })
     .from(jobs)
     .where(
       and(
+        eq(jobs.active, true),
         sql`lower(${jobs.city}) = lower(${city})`,
         sql`${jobs.salary} <> ''`,
         like(jobs.salary, '%EUR%'),
@@ -28,7 +35,14 @@ export default defineEventHandler(async (event) => {
   if (!rows.length) return { city, salaries: [], count: 0 }
 
   const internPattern = /\b(trainee|internship|intern|praktik)/i
-  const parsed: { low: number; high: number }[] = []
+  const parsed: {
+    low: number
+    high: number
+    title: string
+    company: string
+    url: string
+    category: string
+  }[] = []
 
   for (const row of rows) {
     try {
@@ -40,7 +54,16 @@ export default defineEventHandler(async (event) => {
       let [low, high] = nums.split('-').map(Number)
       if (isHourly) continue
       if (isMonthly) { low *= 12; high *= 12 }
-      if (low >= 30000 && high >= 30000) parsed.push({ low: Math.round(low), high: Math.round(high) })
+      if (low >= 30000 && high >= 30000) {
+        parsed.push({
+          low: Math.round(low),
+          high: Math.round(high),
+          title: row.title || '',
+          company: row.company || '',
+          url: row.url || '',
+          category: row.category || '',
+        })
+      }
     } catch {}
   }
 

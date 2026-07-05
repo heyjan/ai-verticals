@@ -115,12 +115,48 @@ AI_KEYWORDS = [
 COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in AI_KEYWORDS]
 
 
+# Tech keywords that are specific enough to keep a job even when the
+# title is generic. A job titled "Software Engineer" whose description
+# mentions "PyTorch" is almost certainly AI/ML-adjacent; one that merely
+# says "we use AI to power our product" is not.
+STRONG_DESC_KEYWORDS = [
+    r'\bmachine learning\b', r'\bmaschinenlernen\b',
+    r'\bdeep learning\b', r'\breinforcement learning\b', r'\bfederated learning\b',
+    r'\bllm\b', r'\blarge language model', r'\bgenerative ai\b', r'\bgenai\b',
+    r'\btensorflow\b', r'\bpytorch\b', r'\bscikit[- ]learn\b', r'\bkeras\b',
+    r'\bhugging\s?face\b', r'\blangchain\b', r'\blanggraph\b', r'\bllama\.?index',
+    r'\bvector\s?database\b', r'\bvector\s?store\b', r'\bembedding[s]?\b',
+    r'\bfine[- ]?tun', r'\bprompt engineer',
+    r'\bcomputer vision\b', r'\bimage recognition\b', r'\bobject detection\b',
+    r'\bnatural language processing\b',
+    r'\bdiffusion model', r'\bfoundation model',
+    r'\bdata scien', r'\bml[- ]?engineer', r'\bml[- ]?ops\b', r'\bmlops\b',
+    r'\bai[- ]?(engineer|architect|researcher|scientist|consultant|specialist|lead|developer)',
+]
+COMPILED_STRONG_DESC = [re.compile(p, re.IGNORECASE) for p in STRONG_DESC_KEYWORDS]
+
+
 def is_ai_relevant(title: str, description: str) -> tuple[bool, str]:
-    """Check if a job is AI-relevant. Returns (is_relevant, matched_keyword)."""
-    text = f"{title} {description}"
+    """Two-tier AI relevance check:
+
+    1. Title-match against AI_KEYWORDS — covers e.g. "AI Engineer",
+       "ML Researcher", "Data Scientist", "KI Consultant". This is the
+       primary signal because AI jobs almost always announce themselves
+       in the title.
+    2. As a salvage path, also accept jobs whose description contains a
+       STRONG_DESC_KEYWORD (PyTorch, LLM, "machine learning", etc.) even
+       if the title is generic. Generic "AI" mentions in description
+       (boilerplate "we leverage AI") are intentionally rejected.
+
+    Previous logic matched AI_KEYWORDS anywhere in title+description,
+    which let through ~60% noise (real-estate, customer-service, etc.).
+    """
     for pattern, keyword in zip(COMPILED_PATTERNS, AI_KEYWORDS):
-        if pattern.search(text):
+        if pattern.search(title):
             return True, keyword
+    for pattern, raw in zip(COMPILED_STRONG_DESC, STRONG_DESC_KEYWORDS):
+        if pattern.search(description):
+            return True, raw
     return False, ""
 
 
@@ -209,7 +245,13 @@ def main():
             json.dump(removed, f, ensure_ascii=False, indent=2)
         print(f"Removed jobs saved:   {removed_path} ({len(removed)} jobs)")
 
-        print(f"\nTo re-seed the DB, update seed.ts to point to:\n  ../data/{out_path.name}")
+        # Repoint merged-latest.json to the cleaned output so the import
+        # step picks up the filtered set, not the raw merge.
+        latest = output_dir / "merged-latest.json"
+        if latest.exists() or latest.is_symlink():
+            latest.unlink()
+        latest.symlink_to(out_path.name)
+        print(f"Latest: {latest} -> {out_path.name}")
     else:
         print("\nDry run — no files written. Use --apply to save cleaned dataset.")
 

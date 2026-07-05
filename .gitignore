@@ -20,10 +20,16 @@ build/
 # Raw scrape data (large, regenerable — kept locally only)
 data/raw/
 
-# Processed dataset, except the stable "latest" pointer used by
-# `make import` and the seed image. Timestamped artifacts stay local.
-data/processed/merged_jobs_*.json
-data/processed/removed_jobs_*.json
+# Processed / intermediate datasets — large and regenerable from the
+# scrapers + import pipeline. Kept local only; the seed image
+# (data/seed/jobs.db) is the source of truth for fresh deploys.
+data/processed/
+
+# Trained model binaries (regenerable via scrapers/.../dedup/train.py).
+data/models/
+
+# Generated reports (HTML + screenshots) produced from the live dataset.
+reports/
 
 # Old top-level data layout (pre-restructure) — these files were moved
 # to scrapers/ artifacts and are not part of the new convention.

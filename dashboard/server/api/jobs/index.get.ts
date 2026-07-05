@@ -18,7 +18,8 @@ export default defineEventHandler(async (event) => {
   const city = (query.city as string) || ''
   const search = (query.search as string) || ''
 
-  const filters: SQL[] = []
+  // Live listings only — taken-down jobs are soft-deleted (active=false).
+  const filters: SQL[] = [eq(jobs.active, true)]
   if (category) filters.push(eq(jobs.category, category))
   if (city) filters.push(eq(jobs.city, city))
   if (search) {

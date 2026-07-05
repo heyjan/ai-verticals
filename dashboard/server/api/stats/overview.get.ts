@@ -10,7 +10,7 @@
  */
 
 import { jobs } from '@ai-job-classifier/db'
-import { count, countDistinct, max, sql } from 'drizzle-orm'
+import { count, countDistinct, eq, max, sql } from 'drizzle-orm'
 
 import { db } from '../../utils/db'
 
@@ -29,10 +29,12 @@ export default defineEventHandler(async () => {
       lastUpdatedRaw: max(jobs.updatedAt),
     })
     .from(jobs)
+    .where(eq(jobs.active, true))
 
   const sourceRows = await db
     .select({ source: jobs.source, cnt: count() })
     .from(jobs)
+    .where(eq(jobs.active, true))
     .groupBy(jobs.source)
     .orderBy(sql`count(*) DESC`)
 

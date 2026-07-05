@@ -13,5 +13,8 @@ export function useStats() {
 
   const knowledgeGraph = useFetch('/api/knowledge-graph', { lazy: true })
 
-  return { overview, byCategory, byCity, byLevel, topCompanies, companyFilter, knowledgeGraph }
+  const growth = useFetch('/api/stats/growth', { lazy: true })
+  const recentJobs = useFetch('/api/jobs/recent', { lazy: true })
+
+  return { overview, byCategory, byCity, byLevel, topCompanies, companyFilter, knowledgeGraph, growth, recentJobs }
 }

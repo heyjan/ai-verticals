@@ -162,16 +162,21 @@ watchEffect(() => {
       v-for="cp in cityPositions"
       :key="cp.city.city"
     >
-      <!-- Invisible hit area (larger click/hover target) -->
+      <!-- Invisible hit area: a fixed tall column centred on the city dot.
+           Independent of bar height so short bars are just as clickable as
+           tall ones, and aiming above/below the wireframe still registers.
+           Width kept narrow (0.5) so closely-spaced cities like
+           Berlin/Potsdam don't share a hit-box; total y-range 0 → 6 covers
+           every bar (barHeight() caps at ~5.1). -->
       <TresMesh
-        :position="[cp.x, cp.height / 2, cp.z]"
+        :position="[cp.x, 3, cp.z]"
         :pointer-events="'auto'"
         @pointerenter="(e: any) => onBarPointerEnter(cp.city, e)"
         @pointermove="(e: any) => onBarPointerMove(cp.city, e)"
         @pointerleave="onBarPointerLeave"
         @click="() => onBarClick(cp.city)"
       >
-        <TresBoxGeometry :args="[0.6, cp.height, 0.6]" />
+        <TresBoxGeometry :args="[0.5, 6, 0.5]" />
         <TresMeshBasicMaterial :opacity="0" :transparent="true" :depth-write="false" />
       </TresMesh>
 

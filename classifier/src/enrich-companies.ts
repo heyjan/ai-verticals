@@ -85,13 +85,25 @@ async function main(): Promise<void> {
     .slice(0, 50)
     .map((c) => c.company)
 
-  const toEnrich = Array.from(new Set([...top50All, ...top50Us]))
+  const targets = Array.from(new Set([...top50All, ...top50Us]))
+
+  // Keep existing descriptions; only fetch firms that newly entered the top
+  // set and don't have one yet. Pass FORCE=1 to re-fetch everything.
+  const force = process.env.FORCE === '1'
+  const existing = force
+    ? []
+    : await db.select({ company: companyDescriptions.company }).from(companyDescriptions)
+  const known = new Set(existing.map((r) => r.company))
+
+  const toEnrich = targets.filter((c) => !known.has(c))
   console.log(
-    `[enrich] ${top50All.length} top overall + ${top50Us.length} top US = ${toEnrich.length} unique companies`,
+    `[enrich] ${top50All.length} top overall + ${top50Us.length} top US = ${targets.length} unique targets; ${known.size} already stored, ${toEnrich.length} new to fetch`,
   )
 
-  await db.delete(companyDescriptions)
-  console.log('[enrich] Cleared existing descriptions')
+  if (!toEnrich.length) {
+    console.log('[enrich] Nothing new to enrich.')
+    return
+  }
 
   let success = 0
   for (const company of toEnrich) {
