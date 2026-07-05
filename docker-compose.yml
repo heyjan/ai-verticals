@@ -12,8 +12,13 @@ services:
       # the entrypoint mkdir + chmod a fresh subdir it owns. Portable to
       # Docker (no-op there since Docker handles volume ownership).
       PGDATA: /var/lib/postgresql/data/pgdata
+    # Bind to loopback only: every service reaches Postgres over the compose
+    # network (host `postgres`), so the port never needs to be on a public
+    # interface. Publishing to 127.0.0.1 keeps same-host tooling working
+    # (drizzle-kit studio/push, ad-hoc psql) without exposing the DB to the
+    # outside. Override POSTGRES_BIND=0.0.0.0 only if a remote host must connect.
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
