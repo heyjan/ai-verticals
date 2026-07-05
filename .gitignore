@@ -31,12 +31,12 @@ data/models/
 # Generated reports (HTML + screenshots) produced from the live dataset.
 reports/
 
-# Old top-level data layout (pre-restructure) — these files were moved
-# to scrapers/ artifacts and are not part of the new convention.
-data/linkedin_*.json
-data/glassdoor_*.json
-data/merged_jobs_*.json
-data/removed_jobs_*.json
+# Loose top-level data dumps (pre-restructure scrape/merge artifacts).
+# Anything sitting directly in data/ is a regenerable local dump; the
+# curated subdirs (data/seed/ bootstrap) are matched separately above and
+# unaffected by these (globs don't cross `/`).
+/data/*.json
+/data/*.csv
 
 # Playwright artifacts
 test-results/
