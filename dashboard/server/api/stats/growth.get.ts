@@ -37,7 +37,7 @@ interface SummaryRow {
 }
 
 export default defineEventHandler(async () => {
-  // Daily posting activity, gap-filled, capped to the most recent ~21 days
+  // Daily posting activity, gap-filled, capped to the most recent ~90 days
   // (or the start of our posted_date history, whichever is later).
   const posting = (await db.execute(sql`
     SELECT
@@ -46,8 +46,8 @@ export default defineEventHandler(async () => {
       extract(dow from g)::int        AS dow
     FROM generate_series(
       greatest(
-        coalesce((SELECT min(posted_date) FROM jobs WHERE active), current_date - 13),
-        current_date - 20
+        coalesce((SELECT min(posted_date) FROM jobs WHERE active), current_date - 89),
+        current_date - 89
       ),
       current_date,
       interval '1 day'
