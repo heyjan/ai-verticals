@@ -38,6 +38,13 @@ const props = defineProps<{
 const summary = computed(() => props.data?.summary)
 const posting = computed(() => props.data?.posting ?? [])
 const intake = computed(() => props.data?.intake ?? [])
+const postingRange = ref<'4w' | '3m'>('4w')
+const postingRangeDays = computed(() => postingRange.value === '3m' ? 90 : 28)
+const visiblePosting = computed(() => posting.value.slice(-postingRangeDays.value))
+const postingRangeLabel = computed(() => postingRange.value === '3m' ? '3 months' : '4 weeks')
+function togglePostingRange() {
+  postingRange.value = postingRange.value === '3m' ? '4w' : '3m'
+}
 
 // ── KPIs ──────────────────────────────────────────────────────────────
 const velocity = computed(() =>
@@ -45,7 +52,7 @@ const velocity = computed(() =>
 )
 const peak = computed(() => {
   let best: PostingPoint | null = null
-  for (const p of posting.value) if (!best || p.count > best.count) best = p
+  for (const p of visiblePosting.value) if (!best || p.count > best.count) best = p
   return best
 })
 
@@ -59,19 +66,37 @@ function deltaLabel(n: number): string {
 }
 
 // ── Posting-activity bars ────────────────────────────────────────────
+const MOVING_AVG_DAYS = 7
 const postingMax = computed(() =>
-  Math.max(1, ...posting.value.map((p) => p.count)),
+  Math.max(1, ...visiblePosting.value.map((p) => p.count)),
 )
 function barHeight(c: number): string {
   // floor at 3% so a single-job day is still a visible sliver
   return `${Math.max((c / postingMax.value) * 100, c > 0 ? 4 : 0)}%`
 }
 const isWeekend = (dow: number) => dow === 0 || dow === 6
+const movingAverage = computed(() =>
+  visiblePosting.value.map((p, i, points) => {
+    const window = points.slice(Math.max(0, i - MOVING_AVG_DAYS + 1), i + 1)
+    const avg = window.reduce((sum, point) => sum + point.count, 0) / window.length
+    return { date: p.date, avg }
+  }),
+)
+const movingAveragePath = computed(() => {
+  const pts = movingAverage.value
+  if (pts.length < 1) return ''
+  const n = pts.length
+  const x = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100)
+  const y = (v: number) => 100 - (v / postingMax.value) * 96 - 2
+  return pts
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(2)} ${y(p.avg).toFixed(2)}`)
+    .join(' ')
+})
 
 // Label only a handful of x-ticks so they don't collide.
 function xTickLabel(p: PostingPoint, i: number): string | null {
-  const n = posting.value.length
-  const step = n > 14 ? 4 : n > 8 ? 2 : 1
+  const n = visiblePosting.value.length
+  const step = n > 60 ? 14 : n > 28 ? 7 : n > 14 ? 4 : n > 8 ? 2 : 1
   if (i === n - 1 || i % step === 0) return shortDate(p.date)
   return null
 }
@@ -113,8 +138,8 @@ function shortDate(iso: string): string {
 }
 
 // ── Fresh-jobs feed (one at a time) ──────────────────────────────────
-// Optional title filter: drop student/thesis/intern/Werkstudent roles.
-const EXCLUDE_RE = /\b(student|thesis|intern(ship)?|werkstudent|praktikum|praxissemester)\b/i
+// Optional title filter: drop student/intern/thesis/apprenticeship variants.
+const EXCLUDE_RE = /\b(student|thesis|intern(ship)?|werkstudent|working student|praktikum|praktikant(in)?|praxissemester|duales studium|abschlussarbeit|wissenschaftlicher mitarbeiter|ausbildung|azubi)\b/i
 const showSettings = ref(false)
 const excludeJunior = ref(false)
 const filteredJobs = computed(() =>
@@ -204,29 +229,53 @@ function salaryLabel(raw: string): string | null {
 
         <!-- Posting-activity bar chart -->
         <div class="chart-block chart-block--grow">
-          <div class="chart-head">
-            <span class="chart-title">posting activity</span>
-            <span class="chart-legend">
-              <span class="legend-swatch legend-swatch--day" /> weekday
-              <span class="legend-swatch legend-swatch--weekend ml-2" /> weekend
-            </span>
-          </div>
-          <div class="bars">
-            <div
-              v-for="(p, i) in posting"
-              :key="p.date"
-              class="bar-col"
-              :title="`${shortDate(p.date)} — ${p.count} posted`"
-            >
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  :class="isWeekend(p.dow) ? 'bar-fill--weekend' : ''"
-                  :style="{ height: barHeight(p.count), animationDelay: `${i * 0.02}s` }"
-                />
-              </div>
-              <span class="bar-tick">{{ xTickLabel(p, i) }}</span>
+          <div class="chart-head chart-head--posting">
+            <div>
+              <span class="chart-title">posting activity</span>
+              <span class="chart-window">{{ postingRangeLabel }}</span>
             </div>
+            <div class="chart-actions">
+              <span class="chart-legend">
+                <span class="legend-swatch legend-swatch--day" /> weekday
+                <span class="legend-swatch legend-swatch--weekend ml-2" /> weekend
+                <span class="legend-swatch legend-swatch--average ml-2" /> 7d avg
+              </span>
+              <button
+                class="chart-range-button"
+                type="button"
+                :aria-label="postingRange === '3m' ? 'Show four weeks of posting activity' : 'Show three months of posting activity'"
+                @click="togglePostingRange"
+              >
+                {{ postingRange === '3m' ? '4W' : '3M' }}
+              </button>
+            </div>
+          </div>
+          <div class="posting-chart">
+            <div class="bars">
+              <div
+                v-for="(p, i) in visiblePosting"
+                :key="p.date"
+                class="bar-col"
+                :title="`${shortDate(p.date)} — ${p.count} posted`"
+              >
+                <div class="bar-track">
+                  <div
+                    class="bar-fill"
+                    :class="isWeekend(p.dow) ? 'bar-fill--weekend' : ''"
+                    :style="{ height: barHeight(p.count), animationDelay: `${i * 0.02}s` }"
+                  />
+                </div>
+                <span class="bar-tick">{{ xTickLabel(p, i) }}</span>
+              </div>
+            </div>
+            <svg
+              class="average-svg"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path :d="movingAveragePath" class="average-line" />
+            </svg>
           </div>
         </div>
 
@@ -282,7 +331,7 @@ function salaryLabel(raw: string): string | null {
               </div>
               <label class="feed-modal-row">
                 <input v-model="excludeJunior" type="checkbox" />
-                <span>Hide Student, Thesis, Intern, Werkstudent, Praktikum &amp; Praxissemester roles</span>
+                <span>Hide Student, Thesis, Intern, Werkstudent, Praktikum, Praxissemester, Duales Studium, Abschlussarbeit, Working Student, Wissenschaftlicher Mitarbeiter, Ausbildung, Azubi &amp; Praktikant roles</span>
               </label>
             </div>
           </div>
@@ -402,14 +451,33 @@ function salaryLabel(raw: string): string | null {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 10px;
   margin-bottom: 8px;
 }
+.chart-head--posting { align-items: flex-start; }
 .chart-title {
   font-family: var(--font-mono);
   font-size: 8.5px;
   text-transform: uppercase;
   letter-spacing: 0.2em;
   color: var(--color-ink-faint);
+}
+.chart-window {
+  display: inline-block;
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-accent);
+}
+.chart-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 .chart-legend {
   font-family: var(--font-mono);
@@ -430,8 +498,36 @@ function salaryLabel(raw: string): string | null {
   background: repeating-linear-gradient(45deg, var(--color-ink-faint) 0 2px, transparent 2px 4px);
   border: 1px solid var(--color-ink-ghost);
 }
+.legend-swatch--average {
+  width: 12px;
+  height: 0;
+  border-top: 2px solid var(--color-accent);
+}
+.chart-range-button {
+  width: 30px;
+  height: 20px;
+  border: 1px solid var(--color-ink-ghost);
+  background: var(--color-surface);
+  color: var(--color-ink-faint);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 160ms ease-out, border-color 160ms ease-out, background 160ms ease-out;
+}
+.chart-range-button:hover {
+  color: var(--color-ink);
+  border-color: var(--color-ink);
+}
 
 /* ── bar chart ── */
+.posting-chart {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 90px;
+}
 .bars {
   flex: 1;
   display: flex;
@@ -482,6 +578,23 @@ function salaryLabel(raw: string): string | null {
   margin-top: 4px;
   white-space: nowrap;
   height: 9px;
+}
+.average-svg {
+  position: absolute;
+  inset: 0 0 13px;
+  width: 100%;
+  height: calc(100% - 13px);
+  pointer-events: none;
+  overflow: visible;
+}
+.average-line {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.85));
 }
 
 /* ── cumulative line ── */
