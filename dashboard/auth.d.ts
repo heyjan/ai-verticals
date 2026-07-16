@@ -8,6 +8,7 @@ declare module '#auth-utils' {
     name: string | null
     email: string | null
     avatarUrl: string | null
+    role: 'user' | 'admin'
     /** How the current session was established. */
     provider: 'github' | 'google' | 'x' | 'linkedin' | 'webauthn'
   }

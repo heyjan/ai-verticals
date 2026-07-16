@@ -25,6 +25,10 @@ RUN npm run build
 
 FROM node:22-slim
 WORKDIR /app
+RUN npm install --no-save --no-audit --no-fund playwright@1.61.1 \
+    && npx playwright install --with-deps chromium \
+    && npm cache clean --force
+COPY --from=build /app/node_modules/@fontsource ./node_modules/@fontsource
 COPY --from=build /app/dashboard/.output .output
 ENV NODE_ENV=production
 EXPOSE 3000

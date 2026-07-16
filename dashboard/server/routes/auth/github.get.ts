@@ -26,7 +26,7 @@ export default defineOAuthGitHubEventHandler({
       loggedInAt: new Date().toISOString(),
     })
 
-    return sendRedirect(event, '/')
+    return sendRedirect(event, '/dashboard')
   },
   onError(event, error) {
     console.error('[auth] GitHub OAuth error:', error)
