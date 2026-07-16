@@ -185,7 +185,7 @@ import: ## Cross-DB dedup the merged batch against the DB, then upsert (folds re
 	        --out data/processed/import-resolved.json
 	$(DOCKER) run --rm --network $(PG_NETWORK) $(ENV_FILE) \
 	        -e IMPORT_FILE=/app/data/processed/import-resolved.json $(DATA_VOL) $(DB_IMG) \
-	        npx tsx src/import/from-json.ts
+	        pnpm exec tsx src/import/from-json.ts
 
 xing-prune: ## Soft-delete (active=false) Xing jobs whose listing was taken down (HTTP 410). Daily cron checks 1/7 (id%%7); full sweep weekly. ARGS="--shard-mod 0 --limit 50" to test all.
 	@mkdir -p data/processed
@@ -200,7 +200,7 @@ xing-prune: ## Soft-delete (active=false) Xing jobs whose listing was taken down
 	        --shard-mod 7 $(ARGS)
 	$(DOCKER) run --rm --network $(PG_NETWORK) $(ENV_FILE) \
 	        -e PRUNE_FILE=/app/data/processed/xing-dead.json $(DATA_VOL) $(DB_IMG) \
-	        npx tsx src/prune-jobs.ts
+	        pnpm exec tsx src/prune-jobs.ts
 
 linkedin-prune: ## Soft-delete (active=false) LinkedIn jobs no longer accepting applications (apply CTA gone). Daily cron checks 1/7 (id%%7); full sweep weekly. ARGS="--shard-mod 0 --limit 50" to test all.
 	@mkdir -p data/processed
@@ -215,23 +215,23 @@ linkedin-prune: ## Soft-delete (active=false) LinkedIn jobs no longer accepting 
 	        --shard-mod 7 $(ARGS)
 	$(DOCKER) run --rm --network $(PG_NETWORK) $(ENV_FILE) \
 	        -e PRUNE_FILE=/app/data/processed/linkedin-dead.json $(DATA_VOL) $(DB_IMG) \
-	        npx tsx src/prune-jobs.ts
+	        pnpm exec tsx src/prune-jobs.ts
 
 discover: ## Re-discover sub-segments + tools via DeepSeek. `BG=1` to detach into tmux.
 	$(TMUX_WRAP)$(DOCKER) run --rm --network $(PG_NETWORK) $(ENV_FILE) $(DATA_VOL) $(CLASSIFIER_IMG) \
-	        npx tsx src/discover-taxonomy.ts
+	        pnpm exec tsx src/discover-taxonomy.ts
 
 categorize: ## Assign top-level category to jobs landing as 'Other' via DeepSeek; drops non-AI listings. `BG=1` to detach.
 	$(TMUX_WRAP)$(DOCKER) run --rm --network $(PG_NETWORK) $(ENV_FILE) $(DATA_VOL) $(CLASSIFIER_IMG) \
-	        npx tsx src/categorize-jobs.ts
+	        pnpm exec tsx src/categorize-jobs.ts
 
 classify: ## Classify all jobs into sub-segments + tools (DeepSeek batch). `BG=1` to detach.
 	$(TMUX_WRAP)$(DOCKER) run --rm --network $(PG_NETWORK) $(ENV_FILE) $(DATA_VOL) $(CLASSIFIER_IMG) \
-	        npx tsx src/classify-jobs.ts
+	        pnpm exec tsx src/classify-jobs.ts
 
 enrich: ## Fetch German-language company descriptions for the top firms. `BG=1` to detach.
 	$(TMUX_WRAP)$(DOCKER) run --rm --network $(PG_NETWORK) $(ENV_FILE) $(DATA_VOL) $(CLASSIFIER_IMG) \
-	        npx tsx src/enrich-companies.ts
+	        pnpm exec tsx src/enrich-companies.ts
 
 # ----- daily cycle -----------------------------------------------------
 #

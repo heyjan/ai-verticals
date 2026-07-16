@@ -13,7 +13,7 @@
 
 ## Repo layout
 
-This is an npm-workspaces monorepo plus a Python package and a Postgres image:
+This is a pnpm-workspace monorepo plus a Python package and a Postgres image:
 
 | Path           | What                                                                                            |
 |----------------|--------------------------------------------------------------------------------------------------|

@@ -11,7 +11,7 @@
     "test:cv-exports": "DATABASE_URL=postgres://cv-export-test:cv-export-test@127.0.0.1:5432/cv-export-test playwright test e2e/cv-export.spec.ts"
   },
   "dependencies": {
-    "@ai-job-classifier/db": "*",
+    "@ai-job-classifier/db": "workspace:*",
     "@ai-sdk/vue": "4.0.18",
     "@fontsource/lato": "^5.2.7",
     "@fontsource/montserrat": "^5.2.8",
@@ -39,7 +39,7 @@
     "d3-scale": "^4.0.2",
     "docx": "^9.7.1",
     "dompurify": "3.4.11",
-    "drizzle-orm": "^0.36.4",
+    "drizzle-orm": "^0.45.2",
     "jszip": "^3.10.1",
     "marked": "18.0.5",
     "nuxt": "^4.4.4",
