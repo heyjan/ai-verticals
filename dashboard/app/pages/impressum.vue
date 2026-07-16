@@ -1,6 +1,6 @@
 <script setup lang="ts">
 useHead({
-  title: 'Impressum — ai-verticals.',
+  title: 'Impressum · ai-verticals.',
   meta: [{ name: 'robots', content: 'noindex' }],
 })
 </script>
