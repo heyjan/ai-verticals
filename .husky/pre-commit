@@ -1,0 +1,3 @@
+# Security gate: block the commit if any dependency has a known
+# high or critical vulnerability. Moderate/low findings don't block.
+pnpm audit --audit-level=high
