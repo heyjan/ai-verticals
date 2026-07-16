@@ -1,11 +1,27 @@
 import tailwindcss from '@tailwindcss/vite'
 
+const enableGoogleFonts = process.env.NUXT_ENABLE_GOOGLE_FONTS === 'true'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-11',
   modules: [
     '@tresjs/nuxt',
     'nuxt-auth-utils',
+    ...(enableGoogleFonts ? ['@nuxtjs/google-fonts'] : []),
   ],
+  googleFonts: enableGoogleFonts ? {
+    families: {
+      'IBM Plex Sans': [300, 400, 500, 600, 700],
+      'IBM Plex Mono': [400, 500, 600, 700],
+      'Space Grotesk': [500, 600, 700],
+      Montserrat: [300, 400, 500, 600, 700],
+      'Noto Sans': [300, 400, 500, 600, 700],
+      Lato: [300, 400, 700],
+    },
+    display: 'swap',
+    download: false,
+    useStylesheet: true,
+  } : undefined,
   // Enable WebAuthn (passkey) server handlers + `useWebAuthn()` composable.
   auth: {
     webAuthn: true,
@@ -16,21 +32,38 @@ export default defineNuxtConfig({
   tres: {
     glsl: true,
   },
-  css: ['~/assets/css/main.css'],
+  css: [
+    '@fontsource/lato/latin-400.css',
+    '@fontsource/lato/latin-700.css',
+    '@fontsource/montserrat/latin-400.css',
+    '@fontsource/montserrat/latin-700.css',
+    '@fontsource/noto-sans/latin-400.css',
+    '@fontsource/noto-sans/latin-700.css',
+    '~/assets/css/main.css',
+  ],
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {
-      include: ['three', '@tresjs/core', '@tresjs/cientos'],
+      include: [
+        'three',
+        '@tresjs/core',
+        '@tresjs/cientos',
+        '@tiptap/starter-kit',
+        '@tiptap/vue-3',
+        '@tiptap/extension-image',
+        '@tiptap/extension-link',
+        '@tiptap/extension-table',
+        '@tiptap/extension-table-row',
+        '@tiptap/extension-table-cell',
+        '@tiptap/extension-table-header',
+        '@tiptap/extension-text-align',
+        '@tiptap/extension-text-style',
+      ],
     },
   },
   app: {
     head: {
       title: 'AI Job Command Center',
-      link: [
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap' },
-      ],
     },
   },
   nitro: {
@@ -38,8 +71,20 @@ export default defineNuxtConfig({
       asyncContext: true,
     },
   },
+  routeRules: {
+    // The page formerly known as the CV Builder; keep old links working.
+    '/cv-builder': { redirect: { to: '/template-editor', statusCode: 301 } },
+  },
   runtimeConfig: {
     databaseUrl: process.env.DATABASE_URL,
+    analyticsUrl: process.env.NUXT_ANALYTICS_URL || 'http://localhost:8000',
+    cvBuilder: {
+      // Override with NUXT_CV_BUILDER_ADMIN_ONLY=false to let every logged-in
+      // user access the feature while it is still behind this rollout switch.
+      adminOnly: process.env.NUXT_CV_BUILDER_ADMIN_ONLY !== 'false',
+      // Private server-side storage; never serve this directory statically.
+      storageRoot: process.env.NUXT_CV_BUILDER_STORAGE_ROOT || '.data/cv-builder',
+    },
     // Encrypts the sealed session cookie. Override with NUXT_SESSION_PASSWORD
     // (>= 32 chars) in every non-dev environment; auth-utils auto-generates an
     // ephemeral one in dev if unset.

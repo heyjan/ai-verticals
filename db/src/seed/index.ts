@@ -5,6 +5,7 @@ import postgres from 'postgres'
 
 import { db, pg } from '../client.ts'
 import { jobs } from '../schema.ts'
+import { configureChatReadonlyRole } from '../configure-chat-role.ts'
 import { assertSeedCounts, seedFromSqlite } from './from-sqlite.ts'
 
 async function runMigrations(): Promise<void> {
@@ -13,6 +14,7 @@ async function runMigrations(): Promise<void> {
   const migrationClient = postgres(url, { max: 1 })
   try {
     await migrate(drizzle(migrationClient), { migrationsFolder: './migrations' })
+    await configureChatReadonlyRole(migrationClient)
     console.log('[seed] migrations applied')
   } finally {
     await migrationClient.end()

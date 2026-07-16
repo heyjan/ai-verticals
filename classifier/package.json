@@ -6,18 +6,14 @@
   "scripts": {
     "classify": "tsx src/classify-jobs.ts",
     "discover": "tsx src/discover-taxonomy.ts",
-    "enrich": "tsx src/enrich-companies.ts",
-    "agent": "tsx src/interactive.ts"
+    "enrich": "tsx src/enrich-companies.ts"
   },
   "dependencies": {
     "@ai-job-classifier/db": "*",
-    "@earendil-works/pi-ai": "^0.74.0",
-    "@earendil-works/pi-coding-agent": "^0.74.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.36.4",
     "openai": "^6.37.0",
-    "postgres": "^3.4.5",
-    "typebox": "^1.1.24"
+    "postgres": "^3.4.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

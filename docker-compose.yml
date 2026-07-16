@@ -32,7 +32,8 @@ services:
       context: .
       dockerfile: db/Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://jobs:jobs@postgres:5432/jobs}
+      DATABASE_URL: postgres://${POSTGRES_USER:-jobs}:${POSTGRES_PASSWORD:-jobs}@postgres:5432/${POSTGRES_DB:-jobs}
+      CHAT_RO_PASSWORD: ${CHAT_RO_PASSWORD}
       SEED_DB_PATH: /app/data/seed/jobs.db
     # No bind mount: the seed image bakes in data/seed/jobs.db so a
     # remote deploy bootstraps without any host mount. A bind mount
@@ -42,14 +43,34 @@ services:
         condition: service_healthy
     restart: "no"
 
+  analytics:
+    build:
+      context: .
+      dockerfile: analytics/Dockerfile
+    environment:
+      CHAT_DATABASE_URL: postgres://chat_ro:${CHAT_RO_PASSWORD}@postgres:5432/${POSTGRES_DB:-jobs}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   dashboard:
     build:
       context: .
       dockerfile: dashboard/Dockerfile
-    expose:
-      - "3000"
+    ports:
+      - "${DASHBOARD_BIND:-0.0.0.0}:${DASHBOARD_PORT:-3000}:3000"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://jobs:jobs@postgres:5432/jobs}
+      DATABASE_URL: postgres://${POSTGRES_USER:-jobs}:${POSTGRES_PASSWORD:-jobs}@postgres:5432/${POSTGRES_DB:-jobs}
+      NUXT_ANALYTICS_URL: http://analytics:8000
       HOST: 0.0.0.0
       # Auth (nuxt-auth-utils). Values come from the gitignored root .env.
       # Public origin is https so the OAuth redirect + secure session cookie
@@ -63,11 +84,19 @@ services:
       NUXT_OAUTH_X_CLIENT_SECRET: ${NUXT_OAUTH_X_CLIENT_SECRET:-}
       NUXT_OAUTH_LINKEDIN_CLIENT_ID: ${NUXT_OAUTH_LINKEDIN_CLIENT_ID:-}
       NUXT_OAUTH_LINKEDIN_CLIENT_SECRET: ${NUXT_OAUTH_LINKEDIN_CLIENT_SECRET:-}
+      NUXT_CV_BUILDER_ADMIN_ONLY: ${NUXT_CV_BUILDER_ADMIN_ONLY:-true}
+      NUXT_CV_BUILDER_STORAGE_ROOT: ${NUXT_CV_BUILDER_STORAGE_ROOT:-/app/.data/cv-builder}
+    volumes:
+      # Private server-side CV uploads/exports. Files are only exposed through
+      # authenticated Nitro routes that check user ownership.
+      - cv-builder-data:/app/.data/cv-builder
     depends_on:
       postgres:
         condition: service_healthy
       seed:
         condition: service_completed_successfully
+      analytics:
+        condition: service_healthy
     labels:
       - traefik.enable=true
       - traefik.http.routers.aiverticals.rule=Host(`ai-verticals.dev`) || Host(`www.ai-verticals.dev`)
@@ -78,32 +107,10 @@ services:
       - default
       - proxy
 
-  classifier-agent:
-    build:
-      context: .
-      dockerfile: classifier/Dockerfile
-    command: ["npx", "tsx", "src/interactive.ts"]
-    stdin_open: true
-    tty: true
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://jobs:jobs@postgres:5432/jobs}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      PI_COMPACT_EVERY_TURNS: ${PI_COMPACT_EVERY_TURNS:-20}
-    volumes:
-      # `:Z` so podman/SELinux relabels the host dir for container access.
-      # `:ro` because the agent only reads from data/ (e.g. for ad-hoc imports
-      # the user runs from inside the session); writes go to Postgres.
-      - ./data:/app/data:ro,Z
-    depends_on:
-      postgres:
-        condition: service_healthy
-      seed:
-        condition: service_completed_successfully
-
 networks:
   proxy:
     external: true
 
 volumes:
   pg-data:
+  cv-builder-data:

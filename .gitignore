@@ -67,3 +67,6 @@ docs/
 !README.md
 !**/README.md
 !AGENTS.md
+
+# Design comps / agent scratch — input material, not part of the app.
+.codex/

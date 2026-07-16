@@ -94,6 +94,7 @@ export function toSessionUser(
     name: user.name,
     email: user.email,
     avatarUrl: user.avatarUrl,
+    role: user.role,
     provider,
   }
 }

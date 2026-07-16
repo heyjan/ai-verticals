@@ -1,9 +1,9 @@
 # ai-job-classifier
 
-End-to-end pipeline for scraping, classifying, and exploring AI/tech job listings on the German market. Three services run side by side under one `docker-compose.yml`:
+End-to-end pipeline for scraping, classifying, and exploring AI/tech job listings on the German market. The runtime services are managed by `docker-compose.yml`:
 
 - **dashboard** — Nuxt 4 + Tailwind 4 + Three.js UI on port 3000.
-- **classifier-agent** — long-running pi.dev session you can attach to and ask arbitrary questions about the dataset; the agent calls a `sql` custom tool against Postgres.
+- **analytics** — private FastAPI + Pydantic AI service powering the authenticated Data Chat with read-only SQL.
 - **postgres** — the single source of truth for runtime state.
 
 One-off jobs (scrapers, merge/clean, the DeepSeek batched classifier) are invoked via the `Makefile` as `docker run --rm` against pre-built images.
@@ -12,14 +12,13 @@ One-off jobs (scrapers, merge/clean, the DeepSeek batched classifier) are invoke
 
 ```bash
 cp .env.example .env
-# fill in DEEPSEEK_API_KEY (required for the classifier pipeline) and
-# ANTHROPIC_API_KEY (required for the interactive pi.dev agent).
+# fill in DEEPSEEK_API_KEY and a URL-safe CHAT_RO_PASSWORD (16+ characters).
 
 docker compose build
 make up
 # postgres comes up → `seed` bootstraps from data/seed/jobs.db (3,613 jobs,
 # 71 sub-segments, 74 tools, 80 company descriptions, plus join tables)
-# → dashboard + classifier-agent start.
+# → analytics + dashboard start.
 
 open http://localhost:3000
 curl -s http://localhost:3000/api/stats/overview | jq '.total'   # → 3613
@@ -49,21 +48,14 @@ make psql
 > SELECT count(*) FROM jobs WHERE last_seen_at::date  = current_date;   -- jobs re-confirmed today
 ```
 
-## Interactive analysis agent
+## Data Chat
 
-```bash
-make agent
-# attach to the classifier-agent container
-
-> how many pytorch jobs in Berlin posted in the last 7 days?
-[tool: sql] running...
-[tool: sql] done
-
-Based on the dataset, there are 14 jobs in Berlin mentioning pytorch
-that were first seen in the past 7 days...
-```
-
-The agent has one custom tool (`sql`) that runs read-only queries against the same Postgres the dashboard reads from. It has no shell/file tools — it can only inspect the database.
+Signed-in users can open `/data-chat` and ask natural-language questions about
+companies, tools, locations, and market trends. The private analytics service
+uses DeepSeek and one SQL tool. Queries run as the dedicated `chat_ro` database
+role in read-only transactions with a 10-second timeout and 200-row response cap.
+That role has SELECT access only to the six job-analysis tables and cannot read
+users, OAuth identities, passkeys, or CV data.
 
 ## Make targets
 
@@ -73,7 +65,6 @@ make up                   Start compose services
 make down                 Stop compose services
 make logs                 Tail logs
 make psql                 Open a psql shell against the running Postgres
-make agent                Attach to the long-running pi.dev agent
 
 make scrape-linkedin         ARGS="--pages 10"
 make scrape-linkedin-cities  ARGS="--cities berlin,munich --pages 5"
@@ -96,7 +87,8 @@ See [AGENTS.md](AGENTS.md) for the directory map. The short version:
 
 - `db/` owns the Drizzle schema, migrations, and the SQLite→Postgres bootstrap.
 - `dashboard/` is the Nuxt UI; its API routes talk to Postgres via `@ai-job-classifier/db`.
-- `classifier/` is the TS pipeline service (DeepSeek + pi.dev).
+- `classifier/` is the TypeScript DeepSeek batch-classification pipeline.
+- `analytics/` is the Python Pydantic AI service behind authenticated Data Chat.
 - `scrapers/` is the Python (uv) package: LinkedIn, Glassdoor, merge, clean.
 - `data/seed/jobs.db` is the committed bootstrap dataset — the source of truth for fresh deploys.
 

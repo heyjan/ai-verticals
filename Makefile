@@ -1,6 +1,6 @@
 # ai-job-classifier — top-level orchestration
 #
-# Long-running services (postgres, dashboard, classifier-agent) live in
+# Long-running services (postgres, dashboard, analytics) live in
 # docker-compose. One-off jobs (scrapers, merge/clean, db import, the
 # DeepSeek classifier pipeline) are invoked as `docker run --rm` against
 # pre-built images so arg-passing stays clean.
@@ -48,7 +48,7 @@ DATA_VOL             := -v $(CURDIR)/data:/app/data:Z
 ENV_FILE             := --env-file .env
 
 .PHONY: help doctor build build-scrapers build-classifier build-db build-compose \
-        up down logs ps agent \
+        up down logs ps \
         scrape-linkedin scrape-linkedin-cities scrape-glassdoor scrape-glassdoor-cities \
         scrape-xing-cities linkedin-7days linkedin-24hours linkedin-daily xing-daily \
         merge dedup-train dedup-dbtest clean import xing-prune linkedin-prune discover categorize classify enrich daily \
@@ -86,7 +86,7 @@ build-db: ## Build the db image (used for one-off `make import`)
 
 # ----- compose lifecycle -----------------------------------------------
 
-up: ## Start postgres + seed + dashboard + classifier-agent
+up: ## Start postgres + seed + analytics + dashboard
 	$(DC) up -d
 
 down: ## Stop and remove containers (keeps volumes)
@@ -97,9 +97,6 @@ logs: ## Tail logs from all services
 
 ps: ## Show service status
 	$(DC) ps
-
-agent: ## Attach to the long-running pi.dev agent shell
-	$(DC) attach classifier-agent
 
 psql: ## Open a psql shell against the running Postgres
 	$(DC) exec postgres psql -U $${POSTGRES_USER:-jobs} -d $${POSTGRES_DB:-jobs}

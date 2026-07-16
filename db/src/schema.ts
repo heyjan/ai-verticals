@@ -4,6 +4,8 @@ import {
   date,
   index,
   integer,
+  jsonb,
+  pgEnum,
   pgTable,
   primaryKey,
   serial,
@@ -11,6 +13,8 @@ import {
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
+
+export const userRoleEnum = pgEnum('user_role', ['user', 'admin'])
 
 export const jobs = pgTable(
   'jobs',
@@ -128,6 +132,7 @@ export const users = pgTable('users', {
   email: text('email').unique(),
   name: text('name'),
   avatarUrl: text('avatar_url'),
+  role: userRoleEnum('role').notNull().default('user'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -171,6 +176,128 @@ export const webauthnCredentials = pgTable(
   (t) => [index('webauthn_credentials_user_idx').on(t.userId)],
 )
 
+export type CvDocumentContent = {
+  type: 'doc'
+  content?: unknown[]
+}
+
+export type CvPageSettings = {
+  size: 'A4' | 'Letter'
+  margin: {
+    top: number
+    right: number
+    bottom: number
+    left: number
+  }
+}
+
+// One placement of a text block inside a template slot. `contentOverride`
+// detaches this placement from the library block ("tweak just for this CV")
+// without forking the block itself.
+export type CvSlotAssignment = {
+  blockId: number
+  contentOverride?: CvDocumentContent | null
+}
+
+// Slot name (as defined by the template skeleton) -> ordered block placements.
+// Slots that accept repeatable content (e.g. job bullets) hold multiple entries.
+export type CvSlotAssignments = Record<string, CvSlotAssignment[]>
+
+export const cvDocuments = pgTable(
+  'cv_documents',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    templateId: text('template_id').notNull(),
+    title: text('title').notNull().default('Untitled CV'),
+    content: jsonb('content').$type<CvDocumentContent>().notNull(),
+    themeOverrides: jsonb('theme_overrides')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    page: jsonb('page').$type<CvPageSettings>().notNull(),
+    // Null for legacy free-form documents; set for slot-composed CVs built in
+    // the CV editor. `content` stays the materialized doc used by exports.
+    slotAssignments: jsonb('slot_assignments').$type<CvSlotAssignments>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('cv_documents_user_idx').on(t.userId),
+    index('cv_documents_user_updated_at_idx').on(t.userId, t.updatedAt),
+  ],
+)
+
+// User-authored templates. Built-in templates live in server code and are
+// merged with these at the API layer; text ids keep cv_documents.template_id
+// compatible with both.
+export const cvTemplates = pgTable(
+  'cv_templates',
+  {
+    id: text('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull().default('Untitled Template'),
+    layout: text('layout').$type<'one-column' | 'compact-three-column'>().notNull().default('one-column'),
+    theme: jsonb('theme').$type<Record<string, unknown>>().notNull(),
+    page: jsonb('page').$type<CvPageSettings>().notNull(),
+    // TipTap doc: fixed template chrome plus `textBlockSlot` placeholder nodes
+    // that the CV editor turns into drop zones.
+    skeleton: jsonb('skeleton').$type<CvDocumentContent>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('cv_templates_user_idx').on(t.userId)],
+)
+
+export const cvTextBlocks = pgTable(
+  'cv_text_blocks',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    kind: text('kind').$type<'intro' | 'paragraph' | 'bullet' | 'heading'>().notNull().default('paragraph'),
+    // TipTap doc fragment ({ type: 'doc', content: [...] }) so blocks round-trip
+    // through the same editor and renderers as full documents.
+    content: jsonb('content').$type<CvDocumentContent>().notNull(),
+    tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('cv_text_blocks_user_idx').on(t.userId),
+    index('cv_text_blocks_tags_idx').using('gin', t.tags),
+  ],
+)
+
+export const cvFiles = pgTable(
+  'cv_files',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    documentId: integer('document_id').references(() => cvDocuments.id, { onDelete: 'cascade' }),
+    kind: text('kind').$type<'export' | 'upload'>().notNull(),
+    format: text('format').$type<'html' | 'pdf' | 'docx' | null>(),
+    originalName: text('original_name').notNull(),
+    storageKey: text('storage_key').notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('cv_files_user_idx').on(t.userId),
+    index('cv_files_document_idx').on(t.documentId),
+    uniqueIndex('cv_files_storage_key_unique').on(t.storageKey),
+  ],
+)
+
 export type Job = typeof jobs.$inferSelect
 export type NewJob = typeof jobs.$inferInsert
 export type Subcategory = typeof subcategories.$inferSelect
@@ -180,5 +307,13 @@ export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type OAuthAccount = typeof oauthAccounts.$inferSelect
 export type WebauthnCredential = typeof webauthnCredentials.$inferSelect
+export type CvDocument = typeof cvDocuments.$inferSelect
+export type NewCvDocument = typeof cvDocuments.$inferInsert
+export type CvFile = typeof cvFiles.$inferSelect
+export type NewCvFile = typeof cvFiles.$inferInsert
+export type CvTemplateRow = typeof cvTemplates.$inferSelect
+export type NewCvTemplateRow = typeof cvTemplates.$inferInsert
+export type CvTextBlock = typeof cvTextBlocks.$inferSelect
+export type NewCvTextBlock = typeof cvTextBlocks.$inferInsert
 
 export { sql }
