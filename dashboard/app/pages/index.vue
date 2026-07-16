@@ -1,1113 +1,1219 @@
 <script setup lang="ts">
-const { overview, byCategory, byCity, byLevel, topCompanies, companyFilter, knowledgeGraph, growth, recentJobs } = useStats()
-
-const stats = computed(() => overview.data.value as Record<string, any> | undefined)
-const categories = computed(() => (byCategory.data.value as any[] | undefined) ?? [])
-const cities = computed(() => (byCity.data.value as any[] | undefined) ?? [])
-const levels = computed(() => (byLevel.data.value as any[] | undefined) ?? [])
-const companies = computed(() => (topCompanies.data.value as any[] | undefined) ?? [])
-
-const isLoading = computed(
-  () => overview.pending.value || byCategory.pending.value,
-)
-
-const lastUpdated = computed(() => {
-  const iso = (stats.value as any)?.lastUpdated
-  if (!iso) return null
-  return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+useHead({
+  title: 'ai-verticals. — Der deutsche KI-Arbeitsmarkt, live vermessen',
+  meta: [
+    {
+      name: 'description',
+      content:
+        'ai-verticals analysiert über 10.000 deutsche KI-Stellenanzeigen und macht sichtbar, welche Unternehmen welche Lösungen implementieren — durchsuchbar per Chat.',
+    },
+  ],
 })
 
-const maxCategoryCount = computed(() => {
-  if (!categories.value.length) return 1
-  return Math.max(...categories.value.map((c: any) => c.count))
+// ── Live stats (fallbacks match the design comp) ─────────────────────
+const overview = useFetch('/api/stats/overview', { lazy: true })
+const growth = useFetch('/api/stats/growth', { lazy: true })
+
+const fmt = (n: number) => n.toLocaleString('de-DE')
+const stats = computed(() => {
+  const o = overview.data.value as Record<string, any> | undefined
+  const g = (growth.data.value as any)?.summary
+  return {
+    jobs: o?.total ? fmt(o.total) : '5.343',
+    companies: o?.totalCompanies ? fmt(o.totalCompanies) : '2.813',
+    cities: o?.totalCities ? fmt(o.totalCities) : '617',
+    velocity: g?.new_last3 ? String(Math.round(g.new_last3 / 3)) : '152',
+  }
+})
+const today = computed(() => {
+  const iso = (overview.data.value as any)?.lastUpdated
+  return new Date(iso || Date.now()).toLocaleDateString('de-DE', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  })
 })
 
-const maxCityCount = computed(() => {
-  if (!cities.value.length) return 1
-  return Math.max(...cities.value.map((c: any) => c.count))
-})
+// ── Hero persona switcher ────────────────────────────────────────────
+const personas = [
+  {
+    label: 'Product Manager',
+    title: 'Finden Sie die KI-Use-Cases, die andere schon bauen.',
+    sub: 'ai-verticals analysiert über 10.000 deutsche KI-Stellenanzeigen und macht sichtbar, welche Unternehmen welche Lösungen implementieren — durchsuchbar per Chat, in Sekunden.',
+  },
+  {
+    label: 'Manager',
+    title: 'Wissen, wann Ihr Wettbewerber auf KI setzt.',
+    sub: 'Jede neue KI-Stelle Ihrer Wettbewerber, in Echtzeit erfasst. Alerts einrichten, Details per Chat abfragen — Marktbewegungen sehen, bevor sie in der Presse stehen.',
+  },
+  {
+    label: 'Consultant',
+    title: 'Der deutsche KI-Arbeitsmarkt, quantifiziert.',
+    sub: 'KI-Adoption nach Branche, Stadt, Skill und Zeitverlauf — belastbare Daten für Studien, Pitches und Client-Work statt Bauchgefühl.',
+  },
+  {
+    label: 'AI-Karriere',
+    title: 'Ihr Weg in den KI-Job — mit dem richtigen CV.',
+    sub: 'Sehen, welche Skills wirklich gefragt sind, und mit dem CV Maker aus Ihrem Career Memory für jede Stelle den passenden Lebenslauf bauen.',
+  },
+]
+const persona = ref(0)
 
-const meaningfulLevels = computed(() =>
-  levels.value.filter(
-    (l: any) => l.level && l.level !== 'N/A' && l.level !== 'Keine Angabe' && l.level !== '',
-  ),
-)
+// ── Animated chat demo ───────────────────────────────────────────────
+interface SqlPart { t: string; c: string }
+const convos = [
+  {
+    label: 'Hat Deloitte diesen Monat KI-Stellen ausgeschrieben?',
+    question: 'Hat mein Wettbewerber Deloitte diesen Monat KI-Stellen ausgeschrieben?',
+    sql: [
+      ['SELECT', 'kw'], [' title, city, posted_at ', ''], ['FROM', 'kw'], [' postings\n', ''],
+      ['WHERE', 'kw'], [" company = 'Deloitte' ", ''], ['AND', 'kw'], [" posted_at >= '2026-07-01';", ''],
+    ],
+    lead: 'Ja — 12 neue KI-Stellen im Juli,',
+    rest: 'davon 5 in Berlin. Schwerpunkt: GenAI-Consulting und LLM-Engineering. Auffällig: erstmals eine Rolle für AI Agents / Orchestrierung.',
+    chips: ['alle 12 anzeigen', 'Alert einrichten'],
+  },
+  {
+    label: 'Top-RAG-Skills in München?',
+    question: 'Welche Skills werden in Münchner RAG-Stellen am häufigsten verlangt?',
+    sql: [
+      ['SELECT', 'kw'], [' skill, COUNT(*) ', ''], ['FROM', 'kw'], [' posting_skills\n', ''],
+      ['WHERE', 'kw'], [" city = 'München' ", ''], ['AND', 'kw'], [" tags @> '{RAG}'\n", ''],
+      ['GROUP BY', 'kw'], [' skill ', ''], ['ORDER BY', 'kw'], [' 2 DESC ', ''], ['LIMIT', 'kw'], [' 5;', ''],
+    ],
+    lead: 'Top 5 in 87 Münchner RAG-Postings:',
+    rest: 'Python (71), LangChain (58), Vektordatenbanken (44), OpenAI API (39), Kubernetes (21). LangChain wächst am schnellsten: +34 % ggü. Q1.',
+    chips: ['als Chart anzeigen', 'Postings öffnen'],
+  },
+  {
+    label: 'Welche Banken suchen LLM-Engineers?',
+    question: 'Welche deutschen Banken suchen gerade LLM-Engineers?',
+    sql: [
+      ['SELECT DISTINCT', 'kw'], [' company, city ', ''], ['FROM', 'kw'], [' postings\n', ''],
+      ['WHERE', 'kw'], [" industry = 'Banking' ", ''], ['AND', 'kw'], [' title ', ''], ['ILIKE', 'kw'], [" '%LLM%';", ''],
+    ],
+    lead: '7 Banken, 11 offene Rollen:',
+    rest: 'darunter Deutsche Bank (3, Frankfurt), Commerzbank (2) und DZ Bank. 8 der 11 Postings nennen RAG als Kernanforderung.',
+    chips: ['alle 11 anzeigen', 'Branche abonnieren'],
+  },
+]
+const convo = ref(0)
+const chatStep = ref(0)
+const chatScript = [
+  { step: 1, delay: 600 },
+  { step: 2, delay: 1400 },
+  { step: 3, delay: 1600 },
+  { step: 4, delay: 1200 },
+]
+let chatTimers: ReturnType<typeof setTimeout>[] = []
 
-const maxLevelCount = computed(() => {
-  if (!meaningfulLevels.value.length) return 1
-  return Math.max(...meaningfulLevels.value.map((l: any) => l.count))
-})
-
-const unspecifiedCount = computed(() =>
-  levels.value
-    .filter((l: any) => !l.level || l.level === 'N/A' || l.level === 'Keine Angabe' || l.level === '')
-    .reduce((s: number, l: any) => s + l.count, 0),
-)
-
-const mappableCities = computed(() =>
-  cities.value.filter((c: any) => c.lat != null && c.lon != null),
-)
-
-const tooltip = ref<{ city: string; count: number; x: number; y: number } | null>(null)
-
-function onMapHover(payload: { city: string; count: number; screenX: number; screenY: number } | null) {
-  tooltip.value = payload
-    ? { city: payload.city, count: payload.count, x: payload.screenX, y: payload.screenY }
-    : null
-}
-
-type ViewportMode = 'metrics' | 'graph' | 'map'
-const viewportMode = ref<ViewportMode>('metrics')
-const graphData = computed(() => {
-  const data = knowledgeGraph.data.value as { nodes: any[]; edges: any[] } | undefined
-  return data && Array.isArray(data.nodes) ? data : { nodes: [], edges: [] }
-})
-
-const growthData = computed(() => growth.data.value as any | undefined)
-const recentJobsData = computed<any[]>(() => {
-  const d = recentJobs.data.value as { jobs?: any[] } | undefined
-  return Array.isArray(d?.jobs) ? d!.jobs : []
-})
-
-// ── Fullscreen: take the viewport panel to the full screen via the
-// Fullscreen API. Works for both map (TresJS canvas) and graph (SVG)
-// because they're both children of the same panel element. Escape exits
-// natively; we listen to `fullscreenchange` so the button stays in sync.
-const viewportRef = ref<HTMLElement | null>(null)
-const isFullscreen = ref(false)
-
-function toggleFullscreen() {
-  if (!viewportRef.value) return
-  if (!document.fullscreenElement) {
-    viewportRef.value.requestFullscreen?.().catch(() => {
-      // Some browsers reject without a user gesture in the right frame;
-      // not much we can do here besides ignore.
-    })
-  } else {
-    document.exitFullscreen?.().catch(() => {})
+function runChat(i = convo.value) {
+  chatTimers.forEach(clearTimeout)
+  chatTimers = []
+  convo.value = i
+  chatStep.value = 0
+  let acc = 0
+  for (const { step, delay } of chatScript) {
+    acc += delay
+    chatTimers.push(setTimeout(() => { chatStep.value = step }, acc))
   }
 }
 
-function onFullscreenChange() {
-  isFullscreen.value = document.fullscreenElement === viewportRef.value
-}
+onMounted(() => runChat(0))
+onBeforeUnmount(() => chatTimers.forEach(clearTimeout))
 
-// Guard <Teleport> against SSR — the target div doesn't exist in the
-// SSR HTML pass; we only enable teleporting after the client mounts.
-const isMounted = ref(false)
-onMounted(() => {
-  isMounted.value = true
-  document.addEventListener('fullscreenchange', onFullscreenChange)
-  document.addEventListener('pointerdown', onDocumentPointerDown)
-})
-onBeforeUnmount(() => {
-  document.removeEventListener('fullscreenchange', onFullscreenChange)
-  document.removeEventListener('pointerdown', onDocumentPointerDown)
-})
+const activeConvo = computed(() => convos[convo.value]!)
+const sqlParts = computed<SqlPart[]>(() =>
+  activeConvo.value.sql.map(([t, c]) => ({ t: t as string, c: c as string })),
+)
 
-function onDocumentPointerDown(e: PointerEvent) {
-  // Dismiss the company tooltip when tapping/clicking outside an info icon.
-  // The icon itself stops propagation via @click.stop, but pointerdown still
-  // bubbles, so we check the target.
-  const target = e.target as HTMLElement | null
-  if (!target?.closest('[data-company-info]')) {
-    hideCompanyTooltip()
-  }
-}
+// ── Personas grid ────────────────────────────────────────────────────
+const personaCards = [
+  {
+    tag: '01 // PRODUCT MANAGER',
+    title: 'Use Cases entdecken',
+    text: 'Welche KI-Anwendungsfälle bauen andere gerade? Nach Branche, Rolle und Tool filtern — und Roadmap-Entscheidungen mit Marktdaten belegen.',
+    dark: true,
+  },
+  {
+    tag: '02 // MANAGER',
+    title: 'Wettbewerber beobachten',
+    text: 'Hat der Wettbewerber eine KI-Stelle ausgeschrieben? Alerts in Echtzeit — und der Chatbot beantwortet die Detailfragen.',
+    dark: false,
+  },
+  {
+    tag: '03 // CONSULTANT',
+    title: 'Markt analysieren',
+    text: 'KI-Adoption nach Branche, Stadt und Skill — belastbare Zahlen für Studien, Pitches und Client-Work.',
+    dark: false,
+  },
+  {
+    tag: '04 // AI-KARRIERE',
+    title: 'In KI einsteigen',
+    text: 'Sehen, welche Skills wirklich gefragt sind — und mit dem CV Maker die passende Bewerbung bauen.',
+    dark: false,
+  },
+]
 
-const graphTooltip = ref<{ label: string; count: number; level: number; x: number; y: number } | null>(null)
-function onGraphHover(
-  payload: { label: string; count: number; level: number; screenX: number; screenY: number } | null,
-) {
-  graphTooltip.value = payload
-    ? { label: payload.label, count: payload.count, level: payload.level, x: payload.screenX, y: payload.screenY }
-    : null
-}
+// ── CV maker steps ───────────────────────────────────────────────────
+const cvSteps = [
+  {
+    title: 'CVs hochladen, Textblöcke erhalten',
+    text: 'Erfahrungen, Projekte und Skills werden automatisch extrahiert.',
+  },
+  {
+    title: 'Bewährte Templates wählen',
+    text: 'CV-Formate, die bei Google, Amazon und Microsoft funktionieren.',
+  },
+  {
+    title: 'Pro Job optimieren',
+    text: 'Das Career Memory wählt für jede Stellenanzeige die stärksten Blöcke.',
+  },
+]
 
-const selectedCity = ref<string | null>(null)
-const cityDetail = ref<any>(null)
-const cityDetailPending = ref(false)
-const currentJobIndex = ref(0)
-// Sequence number so a slower fetch for a previous city can't overwrite
-// the result of a newer click. Without this, rapid city switches can
-// leave the panel showing data for the wrong city.
-let cityFetchSeq = 0
+// ── Testimonials (placeholders until real quotes land) ───────────────
+const testimonials = [
+  {
+    quote: '„[Testimonial folgt — Platz für ein Zitat eines Product Managers über Use-Case-Recherche.]"',
+    name: 'Name', role: 'Product Manager, Unternehmen',
+  },
+  {
+    quote: '„[Testimonial folgt — Platz für ein Zitat einer Führungskraft über Wettbewerber-Alerts.]"',
+    name: 'Name', role: 'Manager, Unternehmen',
+  },
+  {
+    quote: '„[Testimonial folgt — Platz für ein Zitat zum CV Maker / Karriereeinstieg in KI.]"',
+    name: 'Name', role: 'AI Engineer, Unternehmen',
+  },
+]
 
-async function onCitySelect(city: string) {
-  if (selectedCity.value === city) {
-    selectedCity.value = null
-    cityDetail.value = null
-    currentJobIndex.value = 0
-    return
-  }
-  const seq = ++cityFetchSeq
-  selectedCity.value = city
-  cityDetailPending.value = true
-  // Don't clear cityDetail here — the stale data keeps the card and
-  // summary rendered while the new fetch is in flight, so switching
-  // cities feels instant instead of unmounting/remounting the card.
-  // The seq check below discards the response if the user has moved on.
-  currentJobIndex.value = 0
+// ── FAQ ──────────────────────────────────────────────────────────────
+const faq = [
+  { q: 'Woher kommen die Daten?', a: 'Wir erfassen laufend öffentliche KI-Stellenanzeigen deutscher Unternehmen — aktuell über 10.000 Postings von mehr als 2.800 Firmen in 600+ Städten. Der Datensatz wächst täglich um durchschnittlich 152 Jobs.' },
+  { q: 'Wie funktioniert der Chatbot?', a: 'Sie stellen Ihre Frage in natürlicher Sprache. Der Chatbot übersetzt sie per SQL-Tool-Call in eine Datenbankabfrage und antwortet direkt aus dem vollständigen Datensatz — inklusive Quellen-Links zu den Postings.' },
+  { q: 'Was sind Search Credits?', a: 'Jede Chatbot-Anfrage verbraucht einen Credit. Basic enthält 100 Credits pro Monat, Pro 500. Das Dashboard selbst ist unbegrenzt nutzbar.' },
+  { q: 'Was ist das Career Memory?', a: 'Ihr persönliches Archiv aus Textblöcken — Erfahrungen, Projekte, Skills — extrahiert aus Ihren hochgeladenen CVs. Bei jeder Bewerbung wählt der CV Maker daraus automatisch die Blöcke, die am besten zur Stellenanzeige passen. Career Memory ist Teil des Pro-Plans.' },
+  { q: 'Welche CV-Templates gibt es?', a: 'Formate, die sich in Bewerbungsprozessen bei Google, Amazon und Microsoft bewährt haben — klar strukturiert, ATS-freundlich, auf Deutsch und Englisch.' },
+  { q: 'Kann ich monatlich kündigen?', a: 'Ja. Beide Pläne sind monatlich kündbar, ohne Mindestlaufzeit.' },
+]
+const openFaq = ref(-1)
+
+// ── Waitlist ─────────────────────────────────────────────────────────
+const email = ref('')
+const joined = ref(false)
+const waitlistBusy = ref(false)
+const waitlistError = ref<string | null>(null)
+
+async function joinWaitlist() {
+  const value = email.value.trim()
+  if (!value || waitlistBusy.value) return
+  waitlistBusy.value = true
+  waitlistError.value = null
   try {
-    const data = await $fetch('/api/stats/city-detail', { params: { city } })
-    if (seq !== cityFetchSeq) return
-    cityDetail.value = data
-  } catch {
-    if (seq !== cityFetchSeq) return
-    cityDetail.value = null
+    await $fetch('/api/waitlist', { method: 'POST', body: { email: value } })
+    joined.value = true
+  } catch (e: any) {
+    waitlistError.value = e?.data?.message || 'Das hat nicht geklappt — bitte erneut versuchen.'
+  } finally {
+    waitlistBusy.value = false
   }
-  if (seq !== cityFetchSeq) return
-  cityDetailPending.value = false
-}
-
-function closeCityDetail() {
-  cityFetchSeq++
-  selectedCity.value = null
-  cityDetail.value = null
-  currentJobIndex.value = 0
-}
-
-function formatSalary(n: number): string {
-  return `${Math.round(n / 1000)}k`
-}
-
-const jobsWithSalary = computed<any[]>(() => {
-  const r = cityDetail.value?.ranges
-  return Array.isArray(r) ? r : []
-})
-
-const currentJob = computed(() => jobsWithSalary.value[currentJobIndex.value] ?? null)
-
-function prevJob() {
-  if (currentJobIndex.value > 0) currentJobIndex.value--
-}
-function nextJob() {
-  if (currentJobIndex.value < jobsWithSalary.value.length - 1) currentJobIndex.value++
-}
-
-const companyTooltip = ref<{ text: string; x: number; y: number } | null>(null)
-
-function showCompanyTooltip(e: Event, description: string) {
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  companyTooltip.value = {
-    text: description,
-    x: rect.left + rect.width / 2,
-    y: rect.top,
-  }
-}
-
-function hideCompanyTooltip() {
-  companyTooltip.value = null
-}
-
-function toggleCompanyTooltip(e: Event, description: string) {
-  if (companyTooltip.value?.text === description) {
-    hideCompanyTooltip()
-  } else {
-    showCompanyTooltip(e, description)
-  }
-}
-
-const companiesPage = ref(0)
-const companiesPerPage = 10
-const companiesPageCount = computed(() => Math.ceil(companies.value.length / companiesPerPage))
-
-function toggleCompanyFilter() {
-  companyFilter.value = companyFilter.value === 'all' ? 'us' : 'all'
-  companiesPage.value = 0
-}
-const pagedCompanies = computed(() => {
-  const start = companiesPage.value * companiesPerPage
-  return companies.value.slice(start, start + companiesPerPage)
-})
-
-function pct(value: number, max: number): string {
-  return `${Math.max((value / max) * 100, 2)}%`
 }
 </script>
 
 <template>
-  <div class="dash blueprint-grid">
-    <!-- ════════ HEADER ════════ -->
-    <header class="dash-header">
-      <div class="header-inner">
-        <img src="/logo.png" alt="ai-verticals.dev" class="header-logo" />
-
-        <div class="header-meta">
-          <span class="font-mono text-[9.5px] uppercase tracking-[0.25em] text-ink-faint">
-            {{ stats?.total ?? '...' }} records
-          </span>
-          <span class="status-flicker flex items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink-faint">
-            <span
-              class="block h-[5px] w-[5px] rounded-full"
-              :class="isLoading ? 'animate-pulse bg-amber-500' : 'bg-emerald-500'"
-            />
-            {{ isLoading ? 'SYNCING' : 'ACTIVE' }}
-          </span>
-          <span v-if="lastUpdated" class="font-mono text-[9.5px] tracking-[0.15em] text-ink-ghost hidden sm:inline">
-            Last updated {{ lastUpdated }}
-          </span>
+  <div class="landing">
+    <!-- ════════ NAV ════════ -->
+    <div class="nav-wrap">
+      <nav class="nav">
+        <NuxtLink to="/" class="nav-logo">ai-verticals.</NuxtLink>
+        <div class="nav-links">
+          <a href="#chat">Chatbot</a>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#cv">CV Maker</a>
+          <a href="#pricing">Preise</a>
+          <a href="#faq">FAQ</a>
+          <NuxtLink to="/login" class="nav-login">Login</NuxtLink>
+          <a href="#waitlist" class="nav-cta">Waitlist beitreten</a>
         </div>
+      </nav>
+    </div>
+
+    <!-- ════════ HERO ════════ -->
+    <header class="hero">
+      <div class="persona-tabs">
+        <button
+          v-for="(p, i) in personas"
+          :key="p.label"
+          class="persona-tab"
+          :class="{ 'persona-tab--active': persona === i }"
+          @click="persona = i"
+        >{{ p.label }}</button>
+      </div>
+      <h1 class="hero-title">{{ personas[persona]!.title }}</h1>
+      <p class="hero-sub">{{ personas[persona]!.sub }}</p>
+      <div class="hero-cta-row">
+        <a href="#waitlist" class="btn-primary">Waitlist beitreten</a>
+        <span class="hero-ticker">{{ stats.jobs }} JOBS · <span class="live-dot">● LIVE</span> · {{ today }}</span>
       </div>
     </header>
 
-    <!-- ════════ STATS COLUMN ════════ -->
-    <aside class="dash-stats panel reg-marks p-5">
-      <h2 class="panel-header">SYS.info</h2>
-
-      <p class="text-[13px] leading-relaxed text-ink-light mb-4">
-        Wo wird KI in Deutschland wirklich eingesetzt? Dieses Dashboard analysiert
-        Stellenanzeigen und macht sichtbar, welche Unternehmen KI-Lösungen implementieren
-        &mdash; in welchen Städten, Branchen und Rollen. Ein ausgezeichnetes Werkzeug
-        zur Identifikation von KI-Anwendungsfällen (Use Cases).
-      </p>
-    </aside>
-
-    <!-- ════════ VIEWPORT ════════ -->
-    <section
-      ref="viewportRef"
-      class="dash-viewport panel reg-marks relative overflow-hidden p-0"
-      :class="{ 'dash-viewport--fullscreen': isFullscreen }"
-    >
-      <!-- Registration marks inner element for all 4 corners -->
-      <div class="reg-marks-full absolute inset-0 pointer-events-none z-10" />
-
-      <!-- Tooltip teleport target. Lives inside the viewport panel so it's
-           a descendant of the fullscreen element when fullscreen is active
-           (Teleport-to-body would render outside the fullscreen tree and
-           the OS hides anything outside that subtree). -->
-      <div id="viewport-overlay-root" class="viewport-overlay-root" />
-
-      <!-- Top-right toolbar: fullscreen toggle + mode toggle -->
-      <div class="absolute top-3 right-3 z-20 flex items-center gap-2">
-        <button
-          class="viewport-fs-btn"
-          :aria-label="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
-          :title="isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'"
-          @click="toggleFullscreen"
-        >
-          <svg v-if="!isFullscreen" viewBox="0 0 16 16" class="viewport-fs-icon" aria-hidden="true">
-            <!-- Four corner brackets — expand icon -->
-            <path d="M2 5V2h3" />
-            <path d="M11 2h3v3" />
-            <path d="M14 11v3h-3" />
-            <path d="M5 14H2v-3" />
-          </svg>
-          <svg v-else viewBox="0 0 16 16" class="viewport-fs-icon" aria-hidden="true">
-            <!-- Inward corner brackets — collapse icon -->
-            <path d="M5 2v3H2" />
-            <path d="M11 5V2h3" />
-            <path d="M14 11h-3v3" />
-            <path d="M2 11h3v3" />
-          </svg>
-        </button>
-        <div class="flex font-mono text-[8.5px] uppercase tracking-[0.18em] viewport-toggle">
-          <button
-            class="viewport-toggle-btn"
-            :class="viewportMode === 'metrics' ? 'viewport-toggle-btn--active' : ''"
-            @click="viewportMode = 'metrics'"
-          >growth</button>
-          <button
-            class="viewport-toggle-btn viewport-toggle-btn--right"
-            :class="viewportMode === 'graph' ? 'viewport-toggle-btn--active' : ''"
-            @click="viewportMode = 'graph'"
-          >graph</button>
-          <button
-            class="viewport-toggle-btn viewport-toggle-btn--right"
-            :class="viewportMode === 'map' ? 'viewport-toggle-btn--active' : ''"
-            @click="viewportMode = 'map'"
-          >map</button>
+    <div class="shell">
+      <NuxtLink to="/dashboard" class="browser-frame">
+        <div class="browser-bar">
+          <span class="browser-dot" /><span class="browser-dot" /><span class="browser-dot" />
+          <span class="browser-url">app.ai-verticals.de/dashboard</span>
         </div>
+        <img src="/landing/dashboard-live.png" alt="Live Dashboard" class="browser-shot">
+      </NuxtLink>
+      <div class="logo-strip">
+        <span>DELOITTE</span><span>SAP</span><span>ADESSO SE</span><span>CHECK24</span><span>DATAANNOTATION</span><span>+{{ stats.companies }} WEITERE</span>
       </div>
-
-      <ClientOnly>
-        <GrowthDashboard
-          v-if="viewportMode === 'metrics'"
-          :data="growthData"
-          :jobs="recentJobsData"
-          :pending="growth.pending.value"
-        />
-        <SceneSetup v-else-if="viewportMode === 'map'" mode="map">
-          <AnimatedGrid />
-          <GermanyMap
-            v-if="mappableCities.length"
-            :city-data="mappableCities"
-            @hover="onMapHover"
-            @select="onCitySelect"
-          />
-        </SceneSetup>
-        <KnowledgeGraph
-          v-else-if="graphData.nodes.length"
-          :data="graphData"
-          @hover="onGraphHover"
-        />
-        <template #fallback>
-          <div class="flex h-full items-center justify-center">
-            <span class="font-mono text-[10.5px] uppercase tracking-[0.3em] text-ink-faint animate-pulse">
-              Initialising viewport
-            </span>
-          </div>
-        </template>
-      </ClientOnly>
-
-      <!-- Empty state for graph mode -->
-      <div
-        v-if="viewportMode === 'graph' && !graphData.nodes.length && !knowledgeGraph.pending.value"
-        class="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
-      >
-        <div class="text-center px-4">
-          <p class="font-mono text-[10.5px] uppercase tracking-[0.32em] mb-2 text-ink-faint">— signal not found —</p>
-          <p class="font-mono text-[10.5px] tracking-[0.05em] text-ink-light">
-            run <code class="font-mono px-1.5 py-0.5 bg-surface-ruled border border-ink-ghost/50 text-ink">make discover</code>
-            then <code class="font-mono px-1.5 py-0.5 bg-surface-ruled border border-ink-ghost/50 text-ink">make classify</code>
-          </p>
-        </div>
-      </div>
-
-      <!-- Map tooltip — teleported into the viewport overlay so it's visible
-           in fullscreen mode too. -->
-      <Teleport to="#viewport-overlay-root" :disabled="!isMounted">
-        <Transition
-          enter-active-class="transition-all duration-150 ease-out"
-          leave-active-class="transition-all duration-100 ease-in"
-          enter-from-class="opacity-0 translate-y-1"
-          leave-to-class="opacity-0 translate-y-1"
-        >
-          <div
-            v-if="tooltip"
-            class="tooltip-panel fixed z-50"
-            :style="{ left: `${tooltip.x + 16}px`, top: `${tooltip.y - 20}px` }"
-          >
-            <p class="font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink-faint">{{ tooltip.city }}</p>
-            <p class="font-mono text-[18.5px] font-bold text-ink mt-0.5">{{ tooltip.count }}<span class="text-[9.5px] font-normal text-ink-faint ml-1">jobs</span></p>
-          </div>
-        </Transition>
-      </Teleport>
-
-      <!-- Graph tooltip (matches the map tooltip aesthetic) — same overlay target -->
-      <Teleport to="#viewport-overlay-root" :disabled="!isMounted">
-        <Transition
-          enter-active-class="transition-all duration-150 ease-out"
-          leave-active-class="transition-all duration-100 ease-in"
-          enter-from-class="opacity-0 translate-y-1"
-          leave-to-class="opacity-0 translate-y-1"
-        >
-          <div
-            v-if="graphTooltip"
-            class="tooltip-panel fixed z-50 graph-tooltip"
-            :style="{ left: `${graphTooltip.x + 16}px`, top: `${graphTooltip.y - 20}px` }"
-          >
-            <p class="font-mono text-[8.5px] uppercase tracking-[0.22em] text-ink-faint flex items-center gap-2">
-              <span class="graph-tooltip-marker" :data-level="graphTooltip.level" />
-              {{ graphTooltip.level === 1 ? 'Cohort' : graphTooltip.level === 2 ? 'Sub-segment' : 'Tool · Skill' }}
-            </p>
-            <p class="font-mono text-[13px] font-semibold text-ink mt-1 leading-tight">{{ graphTooltip.label }}</p>
-            <p class="font-mono text-[9.5px] tabular-nums text-ink-light mt-0.5">{{ graphTooltip.count.toLocaleString('en-US') }} <span class="text-ink-faint">jobs</span></p>
-          </div>
-        </Transition>
-      </Teleport>
-
-      <!-- City detail stack: salary summary + swipeable per-job card -->
-      <Transition
-        enter-active-class="transition-all duration-200 ease-out"
-        leave-active-class="transition-all duration-150 ease-in"
-        enter-from-class="opacity-0 translate-x-4"
-        leave-to-class="opacity-0 translate-x-4"
-      >
-        <div
-          v-if="selectedCity"
-          class="city-detail-stack absolute top-3 left-3 z-20 w-[280px] flex flex-col gap-2"
-        >
-          <div class="city-detail-panel">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="font-mono text-[11.5px] uppercase tracking-[0.2em] text-ink font-bold">{{ selectedCity }}</h3>
-              <button
-                class="font-mono text-[9.5px] text-ink-faint hover:text-ink transition-colors cursor-pointer"
-                @click="closeCityDetail"
-              >&times; close</button>
-            </div>
-
-            <template v-if="cityDetailPending && !cityDetail">
-              <div class="animate-pulse space-y-2">
-                <div class="h-3 w-3/4 bg-surface-ruled" />
-                <div class="h-3 w-1/2 bg-surface-ruled" />
-              </div>
-            </template>
-
-            <template v-else-if="cityDetail && cityDetail.count > 0">
-              <p class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-faint mb-3">
-                {{ cityDetail.count }} jobs with salary data
-              </p>
-
-              <div class="grid grid-cols-2 gap-x-4 gap-y-3 mb-4">
-                <div>
-                  <p class="font-mono text-[14.5px] font-bold text-ink">{{ formatSalary(cityDetail.medianLow) }}&ndash;{{ formatSalary(cityDetail.medianHigh) }}</p>
-                  <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Median range</p>
-                </div>
-                <div>
-                  <p class="font-mono text-[14.5px] font-bold text-ink">{{ formatSalary(cityDetail.avgLow) }}&ndash;{{ formatSalary(cityDetail.avgHigh) }}</p>
-                  <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Average range</p>
-                </div>
-                <div>
-                  <p class="font-mono text-[12.5px] text-ink-light">{{ formatSalary(cityDetail.min) }}</p>
-                  <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Lowest</p>
-                </div>
-                <div>
-                  <p class="font-mono text-[12.5px] text-ink-light">{{ formatSalary(cityDetail.max) }}</p>
-                  <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint">Highest</p>
-                </div>
-              </div>
-
-              <div class="salary-distribution">
-                <p class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint mb-2">Distribution (EUR/year)</p>
-                <div class="space-y-[2px]">
-                  <div
-                    v-for="(r, i) in cityDetail.ranges.slice(0, 20)"
-                    :key="i"
-                    class="salary-bar-row"
-                  >
-                    <div
-                      class="salary-bar"
-                      :style="{
-                        left: `${(r.low / cityDetail.max) * 100}%`,
-                        width: `${((r.high - r.low) / cityDetail.max) * 100}%`,
-                      }"
-                    />
-                  </div>
-                </div>
-                <div class="flex justify-between mt-1">
-                  <span class="font-mono text-[7.5px] text-ink-ghost">0k</span>
-                  <span class="font-mono text-[7.5px] text-ink-ghost">{{ formatSalary(cityDetail.max) }}</span>
-                </div>
-              </div>
-            </template>
-
-            <template v-else>
-              <p class="font-mono text-[9.5px] text-ink-faint">No salary data available for this city.</p>
-            </template>
-          </div>
-
-          <!-- Swipeable per-job card: one job at a time, prev/next arrows.
-               Stays mounted across city switches as long as some data is
-               available; content is replaced reactively when the fetch
-               settles. -->
-          <div
-            v-if="currentJob"
-            class="city-detail-panel city-job-card"
-          >
-            <div class="flex items-center justify-between mb-3">
-              <p class="font-mono text-[8.5px] uppercase tracking-[0.2em] text-ink-faint">
-                Job <span class="text-ink tabular-nums">{{ currentJobIndex + 1 }}</span>
-                <span class="text-ink-ghost"> / </span>
-                <span class="tabular-nums">{{ jobsWithSalary.length }}</span>
-              </p>
-              <div class="flex items-center gap-1">
-                <button
-                  class="city-job-nav"
-                  :disabled="currentJobIndex === 0"
-                  :aria-label="'Previous job'"
-                  @click="prevJob"
-                >
-                  <svg viewBox="0 0 16 16" class="w-3 h-3" aria-hidden="true">
-                    <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" />
-                  </svg>
-                </button>
-                <button
-                  class="city-job-nav"
-                  :disabled="currentJobIndex >= jobsWithSalary.length - 1"
-                  :aria-label="'Next job'"
-                  @click="nextJob"
-                >
-                  <svg viewBox="0 0 16 16" class="w-3 h-3" aria-hidden="true">
-                    <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <p class="font-mono text-[11.5px] text-ink font-bold leading-snug mb-1 break-words">
-              <a
-                v-if="currentJob.url"
-                :href="currentJob.url"
-                target="_blank"
-                rel="noopener"
-                class="hover:text-accent transition-colors"
-              >{{ currentJob.title }}</a>
-              <span v-else>{{ currentJob.title }}</span>
-            </p>
-            <p class="font-mono text-[9.5px] text-ink-light mb-3 truncate">{{ currentJob.company }}</p>
-
-            <div class="flex items-baseline justify-between mb-2">
-              <p class="font-mono text-[14.5px] font-bold text-ink">
-                {{ formatSalary(currentJob.low) }}&ndash;{{ formatSalary(currentJob.high) }}
-              </p>
-              <span
-                v-if="currentJob.category && currentJob.category !== 'Other'"
-                class="font-mono text-[7.5px] uppercase tracking-[0.15em] text-ink-faint"
-              >{{ currentJob.category }}</span>
-            </div>
-
-            <div class="salary-bar-row">
-              <div
-                class="salary-bar"
-                :style="{
-                  left: `${(currentJob.low / cityDetail.max) * 100}%`,
-                  width: `${((currentJob.high - currentJob.low) / cityDetail.max) * 100}%`,
-                }"
-              />
-            </div>
-            <div class="flex justify-between mt-1">
-              <span class="font-mono text-[7.5px] text-ink-ghost">0k</span>
-              <span class="font-mono text-[7.5px] text-ink-ghost">{{ formatSalary(cityDetail.max) }}</span>
-            </div>
-          </div>
-        </div>
-      </Transition>
-
-      <!-- Viewport labels -->
-      <template v-if="viewportMode === 'map'">
-        <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
-          <p class="font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
-            geo.distribution // perspective
-          </p>
-        </div>
-        <div class="absolute top-2 left-3 z-10 pointer-events-none">
-          <p class="status-flicker font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
-            viewport.3d
-          </p>
-        </div>
-      </template>
-      <template v-else-if="viewportMode === 'graph'">
-        <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
-          <p class="font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
-            knowledge.mechanism // schematic
-          </p>
-        </div>
-        <div class="absolute top-2 left-3 z-10 pointer-events-none">
-          <p class="status-flicker font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
-            viewport.2d
-          </p>
-        </div>
-      </template>
-      <template v-else>
-        <div class="absolute bottom-2 left-3 z-10 pointer-events-none">
-          <p class="font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
-            growth.timeseries // telemetry
-          </p>
-        </div>
-        <div class="absolute top-2 left-3 z-10 pointer-events-none">
-          <p class="status-flicker font-mono text-[7.5px] uppercase tracking-[0.3em] text-ink-faint/40">
-            viewport.data
-          </p>
-        </div>
-      </template>
-    </section>
-
-    <!-- ════════ CATEGORY BREAKDOWN ════════ -->
-    <aside class="dash-categories panel reg-marks overflow-y-auto p-5">
-      <h2 class="panel-header">CAT.segments</h2>
-
-      <template v-if="categories.length">
-        <div class="space-y-3">
-          <div
-            v-for="(cat, idx) in categories"
-            :key="cat.category"
-            class="stagger-item group"
-            :style="{ animationDelay: `${0.05 * idx}s` }"
-          >
-            <div class="flex items-baseline justify-between mb-1">
-              <span class="text-[11.5px] text-ink-light group-hover:text-ink transition-colors">{{ cat.category }}</span>
-              <span class="font-mono text-[10.5px] tabular-nums text-ink-faint group-hover:text-accent transition-colors">
-                {{ cat.count }}
-              </span>
-            </div>
-            <div class="data-bar-track">
-              <div
-                class="data-bar-fill group-hover:bg-accent! transition-colors"
-                :style="{ width: pct(cat.count, maxCategoryCount) }"
-              />
-            </div>
-          </div>
-        </div>
-      </template>
-
-      <template v-else>
-        <div v-for="i in 10" :key="i" class="mb-3">
-          <div class="h-3 w-3/4 animate-pulse bg-surface-ruled" />
-          <div class="mt-1 h-[3px] animate-pulse bg-surface-ruled" />
-        </div>
-      </template>
-    </aside>
-
-    <!-- ════════ TOP CITIES ════════ -->
-    <section class="dash-cities panel reg-marks overflow-y-auto p-5">
-      <h2 class="panel-header">GEO.cities</h2>
-
-      <template v-if="cities.length">
-        <div class="space-y-2">
-          <div
-            v-for="(city, idx) in cities.slice(0, 10)"
-            :key="city.city"
-            class="stagger-item flex items-center gap-2 group"
-            :style="{ animationDelay: `${0.05 * idx}s` }"
-          >
-            <span class="font-mono text-[8.5px] tabular-nums text-ink-ghost w-4 text-right shrink-0">
-              {{ String(idx + 1).padStart(2, '0') }}
-            </span>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-baseline justify-between mb-0.5">
-                <span class="text-[11.5px] text-ink-light truncate group-hover:text-ink transition-colors">
-                  {{ city.city || 'Remote' }}
-                </span>
-                <span class="font-mono text-[10.5px] tabular-nums text-ink-faint ml-2 shrink-0">{{ city.count }}</span>
-              </div>
-              <div class="data-bar-track">
-                <div
-                  class="data-bar-fill group-hover:bg-accent! transition-colors"
-                  :style="{ width: pct(city.count, maxCityCount) }"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </template>
-    </section>
-
-    <!-- ════════ EXPERIENCE LEVELS ════════ -->
-    <!-- Hidden when scrapes ran without detail-page fetching (no
-         seniority_level captured). Reappears automatically once a
-         detail-fetching scrape populates job_level. -->
-    <section v-if="meaningfulLevels.length" class="dash-levels panel reg-marks overflow-hidden p-5">
-      <h2 class="panel-header">LVL.experience</h2>
-
-      <template v-if="meaningfulLevels.length">
-        <div class="space-y-3">
-          <div
-            v-for="(level, idx) in meaningfulLevels"
-            :key="level.level"
-            class="stagger-item group"
-            :style="{ animationDelay: `${0.05 * idx}s` }"
-          >
-            <div class="flex items-baseline justify-between mb-1">
-              <span class="text-[11.5px] text-ink-light group-hover:text-ink transition-colors">{{ level.level }}</span>
-              <span class="font-mono text-[10.5px] tabular-nums text-ink-faint group-hover:text-accent transition-colors">{{ level.count }}</span>
-            </div>
-            <div class="data-bar-track">
-              <div
-                class="data-bar-fill-accent"
-                :style="{ width: pct(level.count, maxLevelCount) }"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div v-if="unspecifiedCount" class="mt-4 pt-3 border-t border-ink-ghost/30">
-          <div class="flex items-baseline justify-between">
-            <span class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-ghost">Unspecified</span>
-            <span class="font-mono text-[9.5px] tabular-nums text-ink-ghost">{{ unspecifiedCount }}</span>
-          </div>
-        </div>
-      </template>
-    </section>
-
-    <!-- ════════ TOP COMPANIES ════════ -->
-    <section class="dash-companies panel reg-marks overflow-y-auto p-5">
-      <div class="flex items-center justify-between mb-0">
-        <h2 class="panel-header mb-0!">ORG.companies</h2>
-        <button
-          class="company-filter-toggle font-mono text-[8.5px] uppercase tracking-[0.15em] px-2 py-0.5 rounded cursor-pointer transition-colors"
-          :class="companyFilter === 'us' ? 'bg-accent text-white' : 'text-ink-faint hover:text-ink border border-ink-ghost/40'"
-          @click="toggleCompanyFilter"
-        >
-          {{ companyFilter === 'us' ? 'US$' : 'ALL' }}
-        </button>
-      </div>
-
-      <template v-if="companies.length">
-        <table class="w-full">
-          <tbody>
-            <tr
-              v-for="(company, idx) in pagedCompanies"
-              :key="company.company"
-              class="stagger-item group border-b border-ink-ghost/20 last:border-0"
-              :style="{ animationDelay: `${0.04 * idx}s` }"
-            >
-              <td class="py-1.5 pr-2 align-top">
-                <span
-                  class="font-mono text-[8.5px] tabular-nums"
-                  :class="companiesPage * companiesPerPage + idx < 3 ? 'text-accent font-bold' : 'text-ink-ghost'"
-                >
-                  {{ String(companiesPage * companiesPerPage + idx + 1).padStart(2, '0') }}
-                </span>
-              </td>
-              <td class="py-1.5 align-top">
-                <span class="text-[11.5px] text-ink-light group-hover:text-ink transition-colors inline-flex items-center gap-1.5 truncate max-w-[280px]">
-                  {{ company.company }}
-                  <button
-                    v-if="company.description"
-                    type="button"
-                    data-company-info
-                    class="shrink-0 cursor-help -m-2 p-2 inline-flex items-center justify-center"
-                    aria-label="Show company description"
-                    @mouseenter="showCompanyTooltip($event, company.description)"
-                    @mouseleave="hideCompanyTooltip"
-                    @click.stop="toggleCompanyTooltip($event, company.description)"
-                  >
-                    <svg class="w-3 h-3 text-ink-ghost group-hover:text-ink-faint transition-colors" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <circle cx="8" cy="8" r="6.5" />
-                      <path d="M8 7v4M8 5.5v0" stroke-linecap="round" />
-                    </svg>
-                  </button>
-                  <svg v-else class="w-3 h-3 text-ink-ghost/30 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <circle cx="8" cy="8" r="6.5" />
-                    <path d="M8 7v4M8 5.5v0" stroke-linecap="round" />
-                  </svg>
-                </span>
-              </td>
-              <td class="py-1.5 pl-2 text-right align-top">
-                <span class="font-mono text-[10.5px] tabular-nums text-ink-faint">{{ company.count }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div v-if="companiesPageCount > 1" class="flex items-center justify-between mt-3 pt-2 border-t border-ink-ghost/30">
-          <button
-            class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
-            :disabled="companiesPage === 0"
-            @click="companiesPage--"
-          >&larr; prev</button>
-          <span class="font-mono text-[8.5px] tabular-nums text-ink-ghost">
-            {{ companiesPage + 1 }} / {{ companiesPageCount }}
-          </span>
-          <button
-            class="font-mono text-[8.5px] uppercase tracking-[0.15em] text-ink-faint hover:text-ink transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
-            :disabled="companiesPage >= companiesPageCount - 1"
-            @click="companiesPage++"
-          >next &rarr;</button>
-        </div>
-      </template>
-    </section>
-
-    <!-- ════════ FOOTER ════════ -->
-    <footer class="dash-footer flex items-center justify-between">
-      <span class="font-mono text-[9.5px] tracking-[0.1em] text-ink-faint">
-        built with &lt;3 by
-        <a href="https://heyjan.de" target="_blank" rel="noopener" class="text-ink-light hover:text-accent transition-colors">heyjan.de</a>
-      </span>
-      <div class="flex items-center gap-4">
-        <a href="https://github.com/heyjan" target="_blank" rel="noopener" class="text-ink-faint hover:text-ink transition-colors" aria-label="GitHub">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        </a>
-        <a href="https://linkedin.com/in/heyjan" target="_blank" rel="noopener" class="text-ink-faint hover:text-ink transition-colors" aria-label="LinkedIn">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-        </a>
-      </div>
-    </footer>
-  </div>
-
-  <Teleport to="body">
-    <div
-      v-if="companyTooltip"
-      class="company-tooltip"
-      :style="{ left: companyTooltip.x + 'px', top: companyTooltip.y + 'px' }"
-    >
-      {{ companyTooltip.text }}
     </div>
-  </Teleport>
+
+    <!-- ════════ CHAT (dark) ════════ -->
+    <section id="chat" class="chat-section">
+      <div class="chat-grid">
+        <div class="chat-copy">
+          <div class="kicker kicker--dark">□ QUERY.ENGINE // SQL.TOOL</div>
+          <h2 class="chat-title">Frag 10.000 Stellenanzeigen. Irgendwas.</h2>
+          <p class="chat-sub">
+            Der Chatbot übersetzt Ihre Frage in SQL und antwortet direkt aus dem kompletten
+            Datensatz. Wettbewerber, Use Cases, Skills, Städte — keine Filter-Klickerei, einfach fragen.
+          </p>
+          <div class="chip-block">
+            <div class="chip-label">BELIEBTE FRAGEN — ANKLICKEN ZUM AUSPROBIEREN</div>
+            <div class="chip-row">
+              <button
+                v-for="(c, i) in convos"
+                :key="c.label"
+                class="q-chip"
+                :class="{ 'q-chip--active': convo === i }"
+                @click="runChat(i)"
+              >{{ c.label }}</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-window">
+          <div class="chat-window-bar">
+            <span class="chat-window-label">CHAT.SESSION // SQL.TOOL</span>
+            <span class="chat-window-status">● CONNECTED</span>
+          </div>
+          <div class="chat-body">
+            <div v-if="chatStep >= 1" class="msg msg-user">{{ activeConvo.question }}</div>
+            <div v-if="chatStep >= 2" class="msg msg-sql"><span
+              v-for="(s, i) in sqlParts"
+              :key="i"
+              :class="s.c === 'kw' ? 'sql-kw' : 'sql-plain'"
+            >{{ s.t }}</span></div>
+            <div v-if="chatStep >= 3" class="msg msg-answer">
+              <strong>{{ activeConvo.lead }}</strong> {{ activeConvo.rest }}
+            </div>
+            <div v-if="chatStep >= 4" class="msg-actions">
+              <span v-for="chip in activeConvo.chips" :key="chip" class="action-chip">{{ chip }}</span>
+            </div>
+            <div class="chat-input">
+              <div class="chat-input-text">{{ chatStep >= 4 ? 'Nächste Frage stellen…' : '' }}<span class="caret">▌</span></div>
+              <button class="chat-run" @click="runChat()">RUN</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ DASHBOARD ════════ -->
+    <section id="dashboard" class="shell section">
+      <div class="kicker center">□ MARKET.INTELLIGENCE</div>
+      <h2 class="section-title">Der deutsche KI-Arbeitsmarkt, live vermessen.</h2>
+      <div class="dash-grid">
+        <div class="card card--flush">
+          <img src="/landing/skills-graph.png" alt="Skills-Graph" class="card-img">
+          <div class="card-body">
+            <div class="card-title">Skills &amp; Tools als Landkarte</div>
+            <p class="card-text">
+              Welche Tools dominieren welche Kohorte? Python, LangChain, RAG, AI Agents —
+              pro Funktion, Branche und Stadt aufgeschlüsselt.
+            </p>
+          </div>
+        </div>
+        <div class="dash-col">
+          <div class="card card--pad">
+            <div class="card-tag">GROWTH.TIMESERIES</div>
+            <div class="card-title">Wachstum &amp; Momentum</div>
+            <p class="card-text">
+              Neue Jobs, Firmen und Städte im Zeitverlauf. Erkennen, wann eine Branche
+              anzieht — bevor es alle wissen.
+            </p>
+            <div class="stat-row">
+              <div class="stat"><div class="stat-num">{{ stats.jobs }}</div><div class="stat-cap">JOBS</div></div>
+              <div class="stat"><div class="stat-num">{{ stats.companies }}</div><div class="stat-cap">COMPANIES</div></div>
+              <div class="stat"><div class="stat-num">{{ stats.cities }}</div><div class="stat-cap">CITIES</div></div>
+              <div class="stat"><div class="stat-num stat-num--accent">{{ stats.velocity }}<span class="stat-unit">/d</span></div><div class="stat-cap">VELOCITY</div></div>
+            </div>
+          </div>
+          <div class="card card--pad">
+            <div class="card-tag">COMPETITOR.ALERTS</div>
+            <div class="card-title">Wettbewerber-Alerts</div>
+            <p class="card-text">
+              Firmen auf die Watchlist setzen — Benachrichtigung, sobald dort eine neue
+              KI-Stelle erscheint.
+            </p>
+            <div class="alert-demo">
+              <span class="alert-dot" />
+              <span>ALERT · Deloitte · „Senior AI Agent Engineer" · vor 2 h</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ PERSONAS ════════ -->
+    <section class="shell section">
+      <div class="kicker center">□ FÜR WEN</div>
+      <h2 class="section-title">Ein Datensatz, vier Use Cases.</h2>
+      <div class="persona-grid">
+        <div
+          v-for="card in personaCards"
+          :key="card.tag"
+          class="persona-card"
+          :class="{ 'persona-card--dark': card.dark }"
+        >
+          <div class="persona-card-tag" :class="{ 'persona-card-tag--accent': card.dark }">{{ card.tag }}</div>
+          <div class="persona-card-title">{{ card.title }}</div>
+          <p class="persona-card-text">{{ card.text }}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ CV MAKER ════════ -->
+    <section id="cv" class="shell section">
+      <div class="cv-panel">
+        <div class="cv-copy">
+          <div class="kicker">□ CV.MAKER // CAREER.MEMORY</div>
+          <h2 class="cv-title">Ein CV pro Job. Automatisch.</h2>
+          <p class="cv-sub">
+            Bestehende CVs hochladen — der CV Maker zerlegt sie in wiederverwendbare
+            Textblöcke, baut daraus Ihr Career Memory und optimiert den Lebenslauf für
+            jede Stelle individuell.
+          </p>
+          <div class="cv-steps">
+            <div v-for="(s, i) in cvSteps" :key="s.title" class="cv-step">
+              <span class="cv-step-num">{{ String(i + 1).padStart(2, '0') }}</span>
+              <div>
+                <div class="cv-step-title">{{ s.title }}</div>
+                <div class="cv-step-text">{{ s.text }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cv-visual">
+          <div class="cv-doc cv-doc--left">
+            <div class="cv-doc-tag">TEMPLATE // GOOGLE</div>
+            <div class="ph ph-h8 w-70 ink" /><div class="ph ph-h5 w-45 mid mt-6" />
+            <div class="ph-group"><div class="ph ph-h4 w-100" /><div class="ph ph-h4 w-92" /><div class="ph ph-h4 w-96" /><div class="ph ph-h4 w-60" /></div>
+            <div class="ph ph-h5 w-40 mid mt-14" />
+            <div class="ph-group ph-group--tight"><div class="ph ph-h4 w-100" /><div class="ph ph-h4 w-85" /></div>
+          </div>
+          <div class="cv-doc cv-doc--main">
+            <div class="cv-doc-head">
+              <span class="cv-doc-tag">OPTIMIERT FÜR</span>
+              <span class="cv-doc-match">MATCH 94%</span>
+            </div>
+            <div class="cv-doc-job">Senior AI Product Manager · SAP</div>
+            <div class="ph ph-h8 w-75 ink" />
+            <div class="cv-doc-skills">
+              <span>RAG</span><span>LangChain</span><span class="cv-skill--hit">AI Agents</span>
+            </div>
+            <div class="ph-group"><div class="ph ph-h4 w-100" /><div class="ph ph-h4 w-94" /><div class="ph ph-h4 w-88" /></div>
+            <div class="cv-doc-note"><span>Career Memory:</span> Block „LLM-Rollout bei Kunde X" eingesetzt — passt zu Anforderung 3.</div>
+          </div>
+          <div class="cv-doc cv-doc--right">
+            <div class="cv-doc-tag">TEMPLATE // AMAZON</div>
+            <div class="ph ph-h8 w-65 ink" /><div class="ph ph-h5 w-50 mid mt-6" />
+            <div class="ph-group"><div class="ph ph-h4 w-100" /><div class="ph ph-h4 w-88" /><div class="ph ph-h4 w-94" /></div>
+            <div class="ph ph-h5 w-38 mid mt-14" />
+            <div class="ph-group ph-group--tight"><div class="ph ph-h4 w-100" /><div class="ph ph-h4 w-70" /></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ PRICING ════════ -->
+    <section id="pricing" class="shell section">
+      <div class="kicker center">□ PREISE</div>
+      <h2 class="section-title">Zwei Pläne. Keine Überraschungen.</h2>
+      <div class="pricing-grid">
+        <div class="price-card">
+          <div class="price-tag">BASIC</div>
+          <div class="price-row"><span class="price-amount">25 €</span><span class="price-per">/ Monat</span></div>
+          <p class="price-desc">Voller Zugriff auf Dashboard und Chatbot.</p>
+          <div class="price-features">
+            <div><span class="check">✓</span>Live-Dashboard, alle Ansichten</div>
+            <div><span class="check">✓</span>SQL-Chatbot · 100 Search Credits / Monat</div>
+            <div><span class="check">✓</span>CV Maker mit allen Templates</div>
+            <div><span class="check">✓</span>Wettbewerber-Alerts · 3 Firmen</div>
+            <div class="feature-muted"><span>—</span>Career Memory</div>
+          </div>
+          <a href="#waitlist" class="btn-outline">Waitlist beitreten</a>
+        </div>
+        <div class="price-card price-card--pro">
+          <div class="price-badge">EMPFOHLEN</div>
+          <div class="price-tag price-tag--accent">PRO</div>
+          <div class="price-row"><span class="price-amount price-amount--light">50 €</span><span class="price-per">/ Monat</span></div>
+          <p class="price-desc price-desc--dark">Für alle, die den Markt täglich nutzen.</p>
+          <div class="price-features price-features--light">
+            <div><span class="check">✓</span>Alles aus Basic</div>
+            <div><span class="check">✓</span>SQL-Chatbot · 500 Search Credits / Monat</div>
+            <div><span class="check">✓</span><span><strong>Career Memory</strong> — CV pro Job automatisch optimiert</span></div>
+            <div><span class="check">✓</span>Wettbewerber-Alerts · unbegrenzt</div>
+            <div><span class="check">✓</span>Prioritäts-Support</div>
+          </div>
+          <a href="#waitlist" class="btn-primary btn-block">Waitlist beitreten</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ TESTIMONIALS ════════ -->
+    <section class="shell section section--tight">
+      <div class="testimonial-grid">
+        <div v-for="t in testimonials" :key="t.role" class="testimonial-card">
+          <div class="stars">★★★★★</div>
+          <p class="testimonial-quote">{{ t.quote }}</p>
+          <div class="testimonial-name">{{ t.name }}<div class="testimonial-role">{{ t.role }}</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ FAQ ════════ -->
+    <section id="faq" class="faq">
+      <div class="kicker center">□ FAQ</div>
+      <h2 class="section-title faq-title">Häufige Fragen</h2>
+      <div class="faq-list">
+        <div v-for="(f, i) in faq" :key="f.q" class="faq-item">
+          <button class="faq-q" @click="openFaq = openFaq === i ? -1 : i">
+            <span>{{ f.q }}</span>
+            <span class="faq-icon">{{ openFaq === i ? '−' : '+' }}</span>
+          </button>
+          <p v-if="openFaq === i" class="faq-a">{{ f.a }}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ WAITLIST CTA + FOOTER ════════ -->
+    <section id="waitlist" class="cta-section">
+      <div class="cta-inner">
+        <div class="kicker kicker--dark">□ WAITLIST // EARLY.ACCESS</div>
+        <h2 class="cta-title">Der KI-Arbeitsmarkt wartet nicht. Sie auch nicht.</h2>
+        <p class="cta-sub">Jetzt eintragen — Early-Access-Plätze werden in Wellen freigeschaltet.</p>
+        <form class="waitlist-form" @submit.prevent="joinWaitlist">
+          <input
+            v-model="email"
+            type="email"
+            required
+            placeholder="ihre@email.de"
+            class="waitlist-input"
+            :disabled="joined"
+          >
+          <button type="submit" class="waitlist-btn" :disabled="waitlistBusy || joined">
+            {{ joined ? '✓ EINGETRAGEN' : waitlistBusy ? '…' : 'WAITLIST →' }}
+          </button>
+        </form>
+        <p v-if="waitlistError" class="waitlist-error">{{ waitlistError }}</p>
+
+        <div class="footer-bar">
+          <span>ai-verticals. © 2026</span>
+          <span class="footer-links">
+            <NuxtLink to="/impressum">IMPRESSUM</NuxtLink><NuxtLink to="/impressum#datenschutz">DATENSCHUTZ</NuxtLink><a href="mailto:jan@heyjan.de">KONTAKT</a>
+          </span>
+          <span>{{ stats.jobs }} RECORDS · <span class="live-dot">● ACTIVE</span></span>
+        </div>
+      </div>
+    </section>
+  </div>
 </template>
 
 <style scoped>
-.dash {
-  display: grid;
-  grid-template-columns: 242px 1fr 286px;
-  grid-template-rows: 90px minmax(600px, 1fr) auto auto;
-  gap: 6px;
-  padding: 0 16px;
-  width: 100vw;
+/* ── Landing palette (self-contained; intentionally not the app tokens) ── */
+.landing {
+  --l-bg: #fbfaf7;
+  --l-ink: #16161f;
+  --l-sub: #4a4a55;
+  --l-faint: #9a9aa8;
+  --l-ghost: #5a5a68;
+  --l-border: #d8d6cf;
+  --l-border-soft: #eceae4;
+  --l-accent: #d92d2d;
+  --l-accent-dark: #a81f1f;
+  --l-green: #3ba55d;
+  --l-dark: #111118;
+  --l-dark-panel: #16161f;
+  --l-dark-line: #26262f;
+  --l-dark-border: #34343f;
+  --l-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --l-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --l-display: 'Space Grotesk', 'IBM Plex Sans', sans-serif;
+
+  background: var(--l-bg);
+  color: var(--l-ink);
+  font-family: var(--l-sans);
+  min-height: 100vh;
 }
 
-.dash-header {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  background: #fff;
-  border-bottom: 1px solid var(--color-ink-ghost);
-  margin: 0 -16px;
-  padding: 0 32px;
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.header-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 100%;
-}
-.header-logo {
-  height: 100%;
-  object-fit: contain;
-  object-position: left;
-  flex-shrink: 0;
-}
-.header-meta {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-shrink: 0;
-}
-.dash-stats      { grid-column: 1; grid-row: 2; }
-.dash-viewport   { grid-column: 2; grid-row: 2; }
-.dash-categories { grid-column: 3; grid-row: 2; }
-.dash-cities     { grid-column: 1; grid-row: 3; }
-.dash-companies  { grid-column: 2; grid-row: 3; }
-.dash-levels     { grid-column: 3; grid-row: 3; }
-.dash-footer {
-  grid-column: 1 / -1;
-  margin: 0 -16px;
-  padding: 0 32px;
-  height: 48px;
-  border-top: 1px solid var(--color-ink-ghost);
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
 }
 
-.city-detail-panel {
-  background: rgba(255, 255, 255, 0.95);
+.shell { max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+.section { padding-top: 88px; }
+.section--tight { padding-top: 40px; }
+
+.kicker {
+  font: 500 10px var(--l-mono);
+  letter-spacing: 2px;
+  color: var(--l-accent);
+}
+.kicker.center { text-align: center; }
+.kicker--dark { color: var(--l-accent); }
+
+.section-title {
+  margin: 16px auto 0;
+  font: 700 40px/1.1 var(--l-display);
+  color: var(--l-ink);
+  letter-spacing: -1px;
+  text-align: center;
+  max-width: 700px;
+  text-wrap: balance;
+}
+
+.live-dot { color: var(--l-green); }
+
+/* ── Nav ─────────────────────────────────────────────────────────── */
+.nav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(251, 250, 247, 0.92);
   backdrop-filter: blur(8px);
-  border: 1px solid var(--color-ink-ghost);
-  border-radius: 4px;
-  padding: 14px 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--l-border-soft);
 }
-
-/* Let clicks pass through the panel surface to the 3D canvas behind it,
-   so cities that project beneath the panel (NW Germany) stay clickable
-   while the panel is open. Only interactive elements catch events.
-   The !important on the auto rule is intentional: the universal-selector
-   .none rule above otherwise wins specificity and renders buttons inert. */
-.city-detail-stack,
-.city-detail-stack .city-detail-panel,
-.city-detail-stack .city-detail-panel * {
-  pointer-events: none;
-}
-.city-detail-stack button,
-.city-detail-stack a {
-  pointer-events: auto !important;
-}
-.salary-bar-row {
-  position: relative;
-  height: 4px;
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: 1px;
-}
-.salary-bar {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  background: var(--color-accent);
-  opacity: 0.6;
-  border-radius: 1px;
-}
-
-/* Per-job card nav (prev/next arrows) — same monochrome register
-   as the fullscreen + viewport-toggle buttons. */
-.city-job-nav {
-  display: inline-flex;
+.nav {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid var(--color-ink-ghost);
-  background: var(--color-surface);
-  color: var(--color-ink-faint);
-  cursor: pointer;
-  transition: color 160ms ease-out, background 160ms ease-out, border-color 160ms ease-out;
+  padding: 16px 32px;
 }
-.city-job-nav:hover:not(:disabled) {
-  color: var(--color-ink);
-  border-color: var(--color-ink);
+.nav-logo {
+  font: 600 18px var(--l-mono);
+  color: var(--l-ink);
 }
-.city-job-nav:disabled {
-  opacity: 0.25;
-  cursor: default;
-}
-
-/* Teleport target — a zero-size container that lives inside the
-   viewport panel so tooltips render inside the fullscreen subtree. */
-.viewport-overlay-root {
-  position: absolute;
-  width: 0;
-  height: 0;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-}
-
-/* ── Fullscreen toggle button (top-right) ────────────────────────── */
-.viewport-fs-btn {
-  display: inline-flex;
+.nav-links {
+  display: flex;
+  gap: 28px;
   align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--color-ink-ghost);
-  background: var(--color-surface);
-  color: var(--color-ink-faint);
-  cursor: pointer;
-  transition: color 160ms ease-out, background 160ms ease-out, border-color 160ms ease-out;
+  font: 500 13.5px var(--l-sans);
 }
-.viewport-fs-btn:hover {
-  color: var(--color-ink);
-  border-color: var(--color-ink);
+.nav-links a { color: var(--l-sub); transition: color 0.15s; }
+.nav-links a:hover { color: var(--l-ink); }
+.nav-login { color: var(--l-faint) !important; }
+.nav-cta {
+  border: 1.5px solid var(--l-ink);
+  border-radius: 99px;
+  padding: 9px 20px;
+  font-weight: 600;
+  color: var(--l-ink) !important;
+  transition: all 0.15s;
 }
-.viewport-fs-icon {
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-}
+.nav-cta:hover { background: var(--l-ink); color: #fff !important; }
 
-/* When the viewport panel is in browser-native fullscreen, its host
-   becomes the root of the screen. Stretch it edge-to-edge, drop the
-   tiny panel border so the diagram has the whole canvas. */
-.dash-viewport--fullscreen {
-  width: 100vw;
-  height: 100vh;
+/* ── Hero ────────────────────────────────────────────────────────── */
+.hero {
+  text-align: center;
+  padding: 64px 32px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+.persona-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  background: var(--l-border-soft);
+  border-radius: 99px;
+  padding: 5px;
+}
+.persona-tab {
   border: 0;
-}
-.dash-viewport--fullscreen .reg-marks-full {
-  display: none;
-}
-
-/* ── Viewport mode toggle (used by both map + graph) ─────────────── */
-.viewport-toggle {
-  background: var(--color-surface);
-}
-.viewport-toggle-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--color-ink-ghost);
-  background: var(--color-surface);
-  color: var(--color-ink-faint);
+  background: transparent;
+  border-radius: 99px;
+  padding: 7px 16px;
   cursor: pointer;
-  transition: color 160ms ease-out, background 160ms ease-out, border-color 160ms ease-out;
-  font-family: var(--font-mono);
+  font: 500 12.5px var(--l-sans);
+  color: var(--l-sub);
+  transition: all 0.2s;
 }
-.viewport-toggle-btn--right {
-  border-left: 0;
+.persona-tab--active { background: var(--l-ink); color: #fff; }
+.hero-title {
+  margin: 0;
+  font: 700 56px/1.08 var(--l-display);
+  color: var(--l-ink);
+  letter-spacing: -1.5px;
+  max-width: 860px;
+  text-wrap: balance;
 }
-.viewport-toggle-btn:hover {
-  color: var(--color-ink);
+.hero-sub {
+  margin: 0;
+  font: 400 18px/1.6 var(--l-sans);
+  color: var(--l-sub);
+  max-width: 620px;
+  text-wrap: pretty;
 }
-.viewport-toggle-btn--active {
-  background: var(--color-ink);
-  color: var(--color-surface);
-  border-color: var(--color-ink);
-}
-.viewport-toggle-btn--active:hover {
-  color: var(--color-surface);
-}
-
-@media (max-width: 1100px) {
-  .dash {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto auto auto auto auto;
-    height: auto;
-  }
-  .dash-header     { grid-column: 1 / -1; grid-row: 1; }
-  .dash-stats      { grid-column: 1; grid-row: 2; }
-  .dash-categories { grid-column: 2; grid-row: 2; }
-  .dash-viewport   { grid-column: 1 / -1; grid-row: 3; min-height: 460px; }
-  .dash-cities     { grid-column: 1; grid-row: 4; }
-  .dash-companies  { grid-column: 2; grid-row: 4; }
-  .dash-levels     { grid-column: 1 / -1; grid-row: 5; }
-  .dash-footer     { grid-column: 1 / -1; grid-row: 6; }
+.hero-cta-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.hero-ticker {
+  font: 500 12px var(--l-mono);
+  color: var(--l-faint);
+  letter-spacing: 1px;
 }
 
-@media (max-width: 640px) {
-  .dash {
-    grid-template-columns: 1fr;
-    padding: 0 10px;
-  }
-  .dash-header {
-    margin: 0 -10px;
-    padding: 8px 12px;
-    height: auto !important;
-  }
-  .header-inner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-  .header-logo {
-    height: 36px;
-  }
-  .header-meta {
-    gap: 0.5rem;
-  }
-  .dash-footer {
-    margin: 0 -10px;
-    padding: 0 20px;
-  }
-  .dash-header, .dash-stats, .dash-viewport, .dash-categories,
-  .dash-cities, .dash-levels, .dash-companies, .dash-footer {
-    grid-column: 1;
-    grid-row: auto;
-  }
-  .dash-viewport { min-height: 360px; }
-}
-</style>
-
-<style>
-.company-tooltip {
-  position: fixed;
-  transform: translateX(-50%) translateY(calc(-100% - 10px));
-  width: 260px;
-  padding: 10px 12px;
-  background: #1a1a1a;
-  color: #e5e5e5;
-  font-family: ui-monospace, monospace;
-  font-size: 10.5px;
-  line-height: 1.5;
-  border-radius: 4px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  z-index: 9999;
-  pointer-events: none;
-}
-.company-tooltip::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: #1a1a1a;
-}
-
-/* Graph tooltip — uses .tooltip-panel base, adds a level marker glyph */
-.graph-tooltip {
-  min-width: 180px;
-}
-.graph-tooltip-marker {
+.btn-primary {
   display: inline-block;
-  width: 8px;
-  height: 8px;
-  border: 1.2px solid var(--color-ink);
-  flex-shrink: 0;
+  background: var(--l-accent);
+  color: #fff;
+  border-radius: 99px;
+  padding: 14px 30px;
+  font: 600 15px var(--l-sans);
+  transition: background 0.15s;
 }
-/* level 1 = cohort: solid black square */
-.graph-tooltip-marker[data-level="1"] {
-  background: var(--color-ink);
+.btn-primary:hover { background: var(--l-accent-dark); color: #fff; }
+.btn-block { text-align: center; margin-top: auto; padding: 13px; font-size: 14px; }
+.btn-outline {
+  margin-top: auto;
+  text-align: center;
+  border: 1.5px solid var(--l-ink);
+  border-radius: 99px;
+  padding: 13px;
+  font: 600 14px var(--l-sans);
+  color: var(--l-ink);
+  transition: all 0.15s;
 }
-/* level 2 = sub-segment: open square */
-.graph-tooltip-marker[data-level="2"] {
-  background: var(--color-surface);
+.btn-outline:hover { background: var(--l-ink); color: #fff; }
+
+/* ── Browser frame + logo strip ──────────────────────────────────── */
+.browser-frame {
+  display: block;
+  border: 1px solid var(--l-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px -20px rgba(22, 22, 31, 0.25);
+  background: #fff;
 }
-/* level 3 = tool: crosshair */
-.graph-tooltip-marker[data-level="3"] {
-  background:
-    linear-gradient(var(--color-ink), var(--color-ink)) center / 100% 1.2px no-repeat,
-    linear-gradient(var(--color-ink), var(--color-ink)) center / 1.2px 100% no-repeat;
-  border-color: transparent;
+.browser-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--l-border-soft);
+}
+.browser-dot { width: 10px; height: 10px; border-radius: 99px; background: #e4e2db; }
+.browser-url { margin-left: 14px; font: 400 11px var(--l-mono); color: var(--l-faint); }
+.browser-shot { display: block; width: 100%; height: auto; }
+.logo-strip {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 36px;
+  margin: 28px 0 32px;
+  font: 500 12px var(--l-mono);
+  letter-spacing: 1px;
+  color: var(--l-faint);
+}
+
+/* ── Chat section (dark) ─────────────────────────────────────────── */
+.chat-section { background: var(--l-dark); margin-top: 24px; }
+.chat-grid {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 56px;
+  padding: 110px 32px;
+  align-items: center;
+}
+.chat-copy { display: flex; flex-direction: column; gap: 24px; }
+.chat-title {
+  margin: 0;
+  font: 700 clamp(30px, 3.4vw, 44px)/1.08 var(--l-display);
+  color: #fff;
+  letter-spacing: -1px;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.chat-sub {
+  margin: 0;
+  font: 400 16px/1.65 var(--l-sans);
+  color: var(--l-faint);
+  max-width: 440px;
+  text-wrap: pretty;
+}
+.chip-block { display: flex; flex-direction: column; gap: 8px; }
+.chip-label { font: 500 9px var(--l-mono); letter-spacing: 2px; color: var(--l-ghost); }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; max-width: 480px; }
+.q-chip {
+  border: 1px solid var(--l-dark-border);
+  color: #c8c8d2;
+  background: transparent;
+  padding: 8px 13px;
+  font: 400 11.5px var(--l-mono);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+.q-chip:hover { border-color: var(--l-accent); color: #fff; }
+.q-chip--active {
+  border-color: var(--l-accent);
+  color: #fff;
+  background: rgba(217, 45, 45, 0.12);
+}
+
+.chat-window {
+  border: 1px solid var(--l-dark-border);
+  background: var(--l-dark-panel);
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.6);
+}
+.chat-window-bar {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--l-dark-line);
+}
+.chat-window-label { font: 500 9px var(--l-mono); letter-spacing: 2px; color: var(--l-ghost); }
+.chat-window-status { font: 500 9px var(--l-mono); color: var(--l-green); }
+.chat-body {
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 420px;
+}
+.msg { animation: fadeUp 0.4s ease both; }
+.msg-user {
+  align-self: flex-end;
+  background: var(--l-dark-line);
+  color: #fff;
+  padding: 12px 16px;
+  font: 400 14px/1.5 var(--l-sans);
+  max-width: 380px;
+  border-radius: 10px 10px 2px 10px;
+}
+.msg-sql {
+  align-self: flex-start;
+  background: #0d0d12;
+  border: 1px solid var(--l-dark-line);
+  padding: 11px 15px;
+  font: 400 11.5px/1.65 var(--l-mono);
+  max-width: 460px;
+  white-space: pre-wrap;
+}
+.sql-kw { color: var(--l-accent); }
+.sql-plain { color: #7a8aa0; }
+.msg-answer {
+  align-self: flex-start;
+  background: #1e1e28;
+  color: #e8e8ee;
+  padding: 13px 16px;
+  font: 400 14px/1.55 var(--l-sans);
+  border-radius: 10px 10px 10px 2px;
+  max-width: 460px;
+}
+.msg-actions { display: flex; gap: 6px; animation: fadeUp 0.4s ease both; }
+.action-chip {
+  border: 1px solid var(--l-dark-border);
+  color: var(--l-faint);
+  padding: 6px 11px;
+  font: 400 10.5px var(--l-mono);
+}
+.chat-input {
+  display: flex;
+  border: 1px solid var(--l-dark-border);
+  background: #0d0d12;
+  margin-top: auto;
+}
+.chat-input-text {
+  flex: 1;
+  padding: 11px 14px;
+  font: 400 12px var(--l-mono);
+  color: var(--l-ghost);
+}
+.caret { color: var(--l-accent); animation: blink 1s step-end infinite; }
+.chat-run {
+  padding: 11px 16px;
+  color: var(--l-faint);
+  font: 500 11px var(--l-mono);
+  border: 0;
+  border-left: 1px solid var(--l-dark-border);
+  background: transparent;
+  cursor: pointer;
+}
+.chat-run:hover { color: #fff; }
+
+/* ── Dashboard section ───────────────────────────────────────────── */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-top: 48px;
+}
+.dash-col { display: flex; flex-direction: column; gap: 28px; }
+.card {
+  border: 1px solid var(--l-border);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+.card--pad { padding: 22px 26px; flex: 1; }
+.card-img { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--l-border-soft); }
+.card-body { padding: 22px 26px; }
+.card-tag { font: 500 9px var(--l-mono); letter-spacing: 2px; color: var(--l-faint); margin-bottom: 8px; }
+.card-title { font: 600 17px var(--l-sans); color: var(--l-ink); }
+.card-text { margin: 8px 0 0; font: 400 14px/1.6 var(--l-sans); color: var(--l-sub); text-wrap: pretty; }
+.stat-row { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; }
+.stat-num { font: 600 22px var(--l-mono); color: var(--l-ink); }
+.stat-num--accent { color: var(--l-accent); }
+.stat-unit { font-size: 12px; color: var(--l-faint); }
+.stat-cap {
+  font: 500 8.5px var(--l-mono);
+  letter-spacing: 1.5px;
+  color: var(--l-faint);
+  margin-top: 3px;
+}
+.alert-demo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  border: 1px solid var(--l-border-soft);
+  border-radius: 8px;
+  padding: 11px 14px;
+  background: var(--l-bg);
+  font: 400 12px var(--l-mono);
+  color: var(--l-sub);
+}
+.alert-dot { width: 8px; height: 8px; border-radius: 99px; background: var(--l-accent); flex: none; }
+
+/* ── Personas grid ───────────────────────────────────────────────── */
+.persona-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-top: 44px;
+}
+.persona-card {
+  border: 1px solid var(--l-border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 24px 22px;
+}
+.persona-card--dark { border-color: var(--l-ink); background: var(--l-ink); }
+.persona-card-tag { font: 500 9px var(--l-mono); letter-spacing: 1.5px; color: var(--l-faint); }
+.persona-card-tag--accent { color: var(--l-accent); }
+.persona-card-title { font: 600 16px var(--l-sans); color: var(--l-ink); margin-top: 10px; }
+.persona-card--dark .persona-card-title { color: #fff; }
+.persona-card-text { margin: 8px 0 0; font: 400 12.5px/1.55 var(--l-sans); color: var(--l-sub); text-wrap: pretty; }
+.persona-card--dark .persona-card-text { color: var(--l-faint); }
+
+/* ── CV maker ────────────────────────────────────────────────────── */
+.cv-panel {
+  border-radius: 16px;
+  background: var(--l-border-soft);
+  padding: 64px 56px;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  align-items: center;
+  overflow: hidden;
+  margin-top: 64px;
+}
+.cv-copy { display: flex; flex-direction: column; gap: 20px; }
+.cv-title {
+  margin: 0;
+  font: 700 40px/1.1 var(--l-display);
+  color: var(--l-ink);
+  letter-spacing: -1px;
+  text-wrap: balance;
+}
+.cv-sub { margin: 0; font: 400 16px/1.65 var(--l-sans); color: var(--l-sub); text-wrap: pretty; }
+.cv-steps { border-top: 1px solid var(--l-border); }
+.cv-step {
+  display: flex;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--l-border);
+  align-items: baseline;
+}
+.cv-step:last-child { border-bottom: 0; }
+.cv-step-num { font: 600 12px var(--l-mono); color: var(--l-accent); flex: none; }
+.cv-step-title { font: 600 14.5px var(--l-sans); color: var(--l-ink); }
+.cv-step-text { font: 400 13px/1.5 var(--l-sans); color: var(--l-sub); margin-top: 3px; }
+
+.cv-visual { display: flex; align-items: center; justify-content: center; min-width: 0; }
+.cv-doc {
+  background: #fff;
+  border: 1px solid var(--l-border);
+  border-radius: 8px;
+  padding: 18px;
+  overflow: hidden;
+}
+.cv-doc--left, .cv-doc--right {
+  flex: 1 1 120px;
+  min-width: 0;
+  max-width: 180px;
+  box-shadow: 0 12px 30px -12px rgba(22, 22, 31, 0.25);
+}
+.cv-doc--left { transform: rotate(-3deg); margin-right: -48px; }
+.cv-doc--right { transform: rotate(3deg); margin-left: -48px; }
+.cv-doc--main {
+  flex: 0 1 220px;
+  min-width: 180px;
+  border: 1.5px solid var(--l-ink);
+  padding: 20px;
+  box-shadow: 0 20px 44px -14px rgba(22, 22, 31, 0.35);
+  position: relative;
+  z-index: 2;
+}
+.cv-doc-tag { font: 500 8px var(--l-mono); letter-spacing: 1.5px; color: var(--l-faint); }
+.cv-doc-head { display: flex; justify-content: space-between; align-items: center; }
+.cv-doc-match { font: 500 8px var(--l-mono); color: var(--l-accent); }
+.cv-doc-job { font: 600 11px var(--l-sans); color: var(--l-ink); margin-top: 4px; }
+.cv-doc-skills { display: flex; gap: 4px; margin-top: 10px; }
+.cv-doc-skills span {
+  font: 500 8px var(--l-mono);
+  background: var(--l-border-soft);
+  padding: 3px 7px;
+  border-radius: 3px;
+  color: var(--l-ink);
+}
+.cv-doc-skills .cv-skill--hit { background: var(--l-accent); color: #fff; }
+.cv-doc-note {
+  border: 1px dashed var(--l-accent);
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-top: 12px;
+  font: 400 9px/1.5 var(--l-sans);
+  color: var(--l-sub);
+}
+.cv-doc-note span { color: var(--l-accent); font-weight: 600; }
+
+/* Placeholder "text" bars inside the CV cards */
+.ph { background: var(--l-border-soft); border-radius: 2px; }
+.ph.ink { background: var(--l-ink); }
+.ph.mid { background: var(--l-border); }
+.ph-h8 { height: 8px; margin-top: 12px; }
+.ph-h5 { height: 5px; }
+.ph-h4 { height: 4px; }
+.mt-6 { margin-top: 6px; }
+.mt-14 { margin-top: 14px; }
+.w-100 { width: 100%; } .w-96 { width: 96%; } .w-94 { width: 94%; } .w-92 { width: 92%; }
+.w-88 { width: 88%; } .w-85 { width: 85%; } .w-75 { width: 75%; } .w-70 { width: 70%; }
+.w-65 { width: 65%; } .w-60 { width: 60%; } .w-50 { width: 50%; } .w-45 { width: 45%; }
+.w-40 { width: 40%; } .w-38 { width: 38%; }
+.ph-group { display: flex; flex-direction: column; gap: 5px; margin-top: 14px; }
+.ph-group--tight { margin-top: 8px; }
+
+/* ── Pricing ─────────────────────────────────────────────────────── */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 380px));
+  gap: 24px;
+  justify-content: center;
+  margin-top: 44px;
+}
+.price-card {
+  border: 1px solid var(--l-border);
+  border-radius: 14px;
+  background: #fff;
+  padding: 32px 30px;
+  display: flex;
+  flex-direction: column;
+}
+.price-card--pro {
+  border: 1.5px solid var(--l-ink);
+  background: var(--l-ink);
+  position: relative;
+}
+.price-badge {
+  position: absolute;
+  top: -11px;
+  right: 26px;
+  background: var(--l-accent);
+  color: #fff;
+  font: 600 9.5px var(--l-mono);
+  letter-spacing: 1.5px;
+  padding: 5px 11px;
+  border-radius: 99px;
+}
+.price-tag { font: 500 10px var(--l-mono); letter-spacing: 2px; color: var(--l-faint); }
+.price-tag--accent { color: var(--l-accent); }
+.price-row { display: flex; align-items: baseline; gap: 6px; margin-top: 14px; }
+.price-amount { font: 700 44px var(--l-display); color: var(--l-ink); }
+.price-amount--light { color: #fff; }
+.price-per { font: 400 14px var(--l-sans); color: var(--l-faint); }
+.price-desc { margin: 10px 0 0; font: 400 13.5px/1.5 var(--l-sans); color: var(--l-sub); }
+.price-desc--dark { color: var(--l-faint); }
+.price-features {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin: 24px 0;
+  font: 400 13.5px/1.4 var(--l-sans);
+  color: var(--l-ink);
+}
+.price-features--light { color: #fff; }
+.price-features > div { display: flex; gap: 10px; }
+.check { color: var(--l-green); font-weight: 600; }
+.feature-muted { color: var(--l-faint); }
+
+/* ── Testimonials ────────────────────────────────────────────────── */
+.testimonial-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.testimonial-card {
+  border: 1px solid var(--l-border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 26px 24px;
+}
+.stars { font: 500 9px var(--l-mono); letter-spacing: 1.5px; color: var(--l-accent); }
+.testimonial-quote { margin: 12px 0 0; font: 400 14.5px/1.6 var(--l-sans); color: var(--l-ink); text-wrap: pretty; }
+.testimonial-name { margin-top: 16px; font: 600 13px var(--l-sans); color: var(--l-ink); }
+.testimonial-role { font: 400 12px var(--l-sans); color: var(--l-faint); margin-top: 2px; }
+
+/* ── FAQ ─────────────────────────────────────────────────────────── */
+.faq { max-width: 760px; margin: 0 auto; padding: 40px 32px 72px; }
+.faq-title { margin-bottom: 36px; font-size: 36px; }
+.faq-list { border-top: 1px solid var(--l-border); }
+.faq-item { border-bottom: 1px solid var(--l-border); }
+.faq-q {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 4px;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: 600 15.5px var(--l-sans);
+  color: var(--l-ink);
+}
+.faq-icon { font: 400 18px var(--l-mono); color: var(--l-accent); flex: none; }
+.faq-a {
+  margin: 0;
+  padding: 0 4px 20px;
+  font: 400 14.5px/1.65 var(--l-sans);
+  color: var(--l-sub);
+  max-width: 640px;
+  text-wrap: pretty;
+}
+
+/* ── Waitlist CTA + footer ───────────────────────────────────────── */
+.cta-section { background: var(--l-dark); }
+.cta-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 80px 32px 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+.cta-title {
+  margin: 0;
+  font: 700 46px/1.08 var(--l-display);
+  color: #fff;
+  letter-spacing: -1px;
+  max-width: 680px;
+  text-wrap: balance;
+}
+.cta-sub { margin: 0; font: 400 16px/1.6 var(--l-sans); color: var(--l-faint); max-width: 480px; }
+.waitlist-form { display: flex; width: 440px; max-width: 100%; }
+.waitlist-input {
+  flex: 1;
+  border: 1px solid var(--l-dark-border);
+  border-right: none;
+  padding: 14px 16px;
+  font: 400 13px var(--l-mono);
+  color: #fff;
+  background: #1a1a23;
+  outline: none;
+  min-width: 0;
+}
+.waitlist-input::placeholder { color: var(--l-ghost); }
+.waitlist-btn {
+  background: var(--l-accent);
+  color: #fff;
+  border: 0;
+  padding: 14px 24px;
+  font: 600 12px var(--l-mono);
+  letter-spacing: 1px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.waitlist-btn:hover:not(:disabled) { background: var(--l-accent-dark); }
+.waitlist-btn:disabled { cursor: default; }
+.waitlist-error { margin: 0; font: 400 12px var(--l-mono); color: var(--l-accent); }
+.footer-bar {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--l-dark-line);
+  margin-top: 56px;
+  padding: 22px 0;
+  font: 500 10px var(--l-mono);
+  letter-spacing: 1.5px;
+  color: var(--l-ghost);
+}
+.footer-links { display: flex; gap: 22px; }
+.footer-links a { color: var(--l-ghost); }
+.footer-links a:hover { color: #fff; }
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .chat-grid { grid-template-columns: 1fr; gap: 40px; padding: 72px 32px; }
+  .dash-grid { grid-template-columns: 1fr; }
+  .persona-grid { grid-template-columns: repeat(2, 1fr); }
+  .cv-panel { grid-template-columns: 1fr; padding: 48px 36px; }
+  .testimonial-grid { grid-template-columns: 1fr; }
+  .pricing-grid { grid-template-columns: minmax(0, 380px); }
+}
+
+@media (max-width: 720px) {
+  .nav-links { gap: 16px; font-size: 12.5px; }
+  .nav-links a:not(.nav-cta):not(.nav-login) { display: none; }
+  .hero-title { font-size: 38px; letter-spacing: -1px; }
+  .section-title { font-size: 30px; }
+  .cta-title { font-size: 32px; }
+  .cv-title { font-size: 30px; }
+  .persona-grid { grid-template-columns: 1fr; }
+  .cv-visual { flex-direction: column; gap: 16px; }
+  .cv-doc--left, .cv-doc--right { display: none; }
+  .cv-doc--main { flex: none; width: 100%; }
+  .shell, .hero, .faq { padding-left: 20px; padding-right: 20px; }
+  .section { padding-top: 56px; }
+  .footer-bar { justify-content: center; text-align: center; }
 }
 </style>

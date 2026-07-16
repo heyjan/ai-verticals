@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-const BASE = 'http://localhost:3000'
+const BASE = 'http://localhost:3000/dashboard'
 
 test.describe('Dashboard visual checks', () => {
   test('full page loads with all panels', async ({ page }) => {

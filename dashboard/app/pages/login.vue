@@ -23,7 +23,7 @@ async function passkeyRegister() {
   try {
     await register({ userName: email.value })
     await refreshSession()
-    await navigateTo('/')
+    await navigateTo('/dashboard')
   } catch (e: any) {
     error.value = e?.data?.statusMessage || e?.message || 'Passkey registration failed.'
   } finally {
@@ -37,7 +37,7 @@ async function passkeyLogin() {
   try {
     await authenticate(email.value || undefined)
     await refreshSession()
-    await navigateTo('/')
+    await navigateTo('/dashboard')
   } catch (e: any) {
     error.value = e?.data?.statusMessage || e?.message || 'Passkey login failed.'
   } finally {
@@ -64,7 +64,7 @@ async function passkeyLogin() {
         >
           Sign out
         </button>
-        <NuxtLink to="/" class="block text-center text-sm text-accent hover:underline">
+        <NuxtLink to="/dashboard" class="block text-center text-sm text-accent hover:underline">
           → Back to dashboard
         </NuxtLink>
       </div>

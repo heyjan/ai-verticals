@@ -31,7 +31,7 @@ export default defineOAuthXEventHandler({
       loggedInAt: new Date().toISOString(),
     })
 
-    return sendRedirect(event, '/')
+    return sendRedirect(event, '/dashboard')
   },
   onError(event, error) {
     console.error('[auth] X OAuth error:', error)
