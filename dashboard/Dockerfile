@@ -30,6 +30,7 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable && corepack prepare pnpm@11.13.1 --activate
 # Hand-written manifest instead of `pnpm init`: init emits a caret-ranged
 # packageManager plus a devEngines block, both of which corepack/npm reject.
+# Pin packageManager to the exact version so corepack accepts it.
 RUN printf '{"name":"dashboard-runtime","private":true,"packageManager":"pnpm@11.13.1"}' > package.json \
     && pnpm add playwright@1.61.1 \
     && pnpm exec playwright install --with-deps chromium \
