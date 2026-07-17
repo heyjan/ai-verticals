@@ -1,11 +1,11 @@
 <script setup lang="ts">
 useHead({
-  title: 'ai-verticals. — Der deutsche KI-Arbeitsmarkt, live vermessen',
+  title: 'ai-verticals. · Der deutsche KI-Arbeitsmarkt, live vermessen',
   meta: [
     {
       name: 'description',
       content:
-        'ai-verticals analysiert über 10.000 deutsche KI-Stellenanzeigen und macht sichtbar, welche Unternehmen welche Lösungen implementieren — durchsuchbar per Chat.',
+        'ai-verticals analysiert über 10.000 deutsche KI-Stellenanzeigen und macht sichtbar, welche Unternehmen welche Lösungen implementieren, durchsuchbar per Chat.',
     },
   ],
 })
@@ -25,33 +25,27 @@ const stats = computed(() => {
     velocity: g?.new_last3 ? String(Math.round(g.new_last3 / 3)) : '152',
   }
 })
-const today = computed(() => {
-  const iso = (overview.data.value as any)?.lastUpdated
-  return new Date(iso || Date.now()).toLocaleDateString('de-DE', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  })
-})
 
 // ── Hero persona switcher ────────────────────────────────────────────
 const personas = [
   {
     label: 'Product Manager',
     title: 'Finden Sie die KI-Use-Cases, die andere schon bauen.',
-    sub: 'ai-verticals analysiert über 10.000 deutsche KI-Stellenanzeigen und macht sichtbar, welche Unternehmen welche Lösungen implementieren — durchsuchbar per Chat, in Sekunden.',
+    sub: 'ai-verticals analysiert über 10.000 deutsche KI-Stellenanzeigen und macht sichtbar, welche Unternehmen welche Lösungen implementieren. Durchsuchbar per Chat, in Sekunden.',
   },
   {
     label: 'Manager',
     title: 'Wissen, wann Ihr Wettbewerber auf KI setzt.',
-    sub: 'Jede neue KI-Stelle Ihrer Wettbewerber, in Echtzeit erfasst. Alerts einrichten, Details per Chat abfragen — Marktbewegungen sehen, bevor sie in der Presse stehen.',
+    sub: 'Jede neue KI-Stelle Ihrer Wettbewerber, in Echtzeit erfasst. Alerts einrichten, Details per Chat abfragen: Marktbewegungen sehen, bevor sie in der Presse stehen.',
   },
   {
     label: 'Consultant',
     title: 'Der deutsche KI-Arbeitsmarkt, quantifiziert.',
-    sub: 'KI-Adoption nach Branche, Stadt, Skill und Zeitverlauf — belastbare Daten für Studien, Pitches und Client-Work statt Bauchgefühl.',
+    sub: 'KI-Adoption nach Branche, Stadt, Skill und Zeitverlauf: belastbare Daten für Studien, Pitches und Client-Work statt Bauchgefühl.',
   },
   {
     label: 'AI-Karriere',
-    title: 'Ihr Weg in den KI-Job — mit dem richtigen CV.',
+    title: 'Ihr Weg in den KI-Job, mit dem richtigen CV.',
     sub: 'Sehen, welche Skills wirklich gefragt sind, und mit dem CV Maker aus Ihrem Career Memory für jede Stelle den passenden Lebenslauf bauen.',
   },
 ]
@@ -67,7 +61,7 @@ const convos = [
       ['SELECT', 'kw'], [' title, city, posted_at ', ''], ['FROM', 'kw'], [' postings\n', ''],
       ['WHERE', 'kw'], [" company = 'Deloitte' ", ''], ['AND', 'kw'], [" posted_at >= '2026-07-01';", ''],
     ],
-    lead: 'Ja — 12 neue KI-Stellen im Juli,',
+    lead: 'Ja, 12 neue KI-Stellen im Juli,',
     rest: 'davon 5 in Berlin. Schwerpunkt: GenAI-Consulting und LLM-Engineering. Auffällig: erstmals eine Rolle für AI Agents / Orchestrierung.',
     chips: ['alle 12 anzeigen', 'Alert einrichten'],
   },
@@ -130,25 +124,25 @@ const personaCards = [
   {
     tag: '01 // PRODUCT MANAGER',
     title: 'Use Cases entdecken',
-    text: 'Welche KI-Anwendungsfälle bauen andere gerade? Nach Branche, Rolle und Tool filtern — und Roadmap-Entscheidungen mit Marktdaten belegen.',
+    text: 'Welche KI-Anwendungsfälle bauen andere gerade? Nach Branche, Rolle und Tool filtern und Roadmap-Entscheidungen mit Marktdaten belegen.',
     dark: true,
   },
   {
     tag: '02 // MANAGER',
     title: 'Wettbewerber beobachten',
-    text: 'Hat der Wettbewerber eine KI-Stelle ausgeschrieben? Alerts in Echtzeit — und der Chatbot beantwortet die Detailfragen.',
+    text: 'Hat der Wettbewerber eine KI-Stelle ausgeschrieben? Alerts in Echtzeit, und der Chatbot beantwortet die Detailfragen.',
     dark: false,
   },
   {
     tag: '03 // CONSULTANT',
     title: 'Markt analysieren',
-    text: 'KI-Adoption nach Branche, Stadt und Skill — belastbare Zahlen für Studien, Pitches und Client-Work.',
+    text: 'KI-Adoption nach Branche, Stadt und Skill: belastbare Zahlen für Studien, Pitches und Client-Work.',
     dark: false,
   },
   {
     tag: '04 // AI-KARRIERE',
     title: 'In KI einsteigen',
-    text: 'Sehen, welche Skills wirklich gefragt sind — und mit dem CV Maker die passende Bewerbung bauen.',
+    text: 'Sehen, welche Skills wirklich gefragt sind, und mit dem CV Maker die passende Bewerbung bauen.',
     dark: false,
   },
 ]
@@ -172,26 +166,26 @@ const cvSteps = [
 // ── Testimonials (placeholders until real quotes land) ───────────────
 const testimonials = [
   {
-    quote: '„[Testimonial folgt — Platz für ein Zitat eines Product Managers über Use-Case-Recherche.]"',
+    quote: '„[Testimonial folgt: Platz für ein Zitat eines Product Managers über Use-Case-Recherche.]"',
     name: 'Name', role: 'Product Manager, Unternehmen',
   },
   {
-    quote: '„[Testimonial folgt — Platz für ein Zitat einer Führungskraft über Wettbewerber-Alerts.]"',
+    quote: '„[Testimonial folgt: Platz für ein Zitat einer Führungskraft über Wettbewerber-Alerts.]"',
     name: 'Name', role: 'Manager, Unternehmen',
   },
   {
-    quote: '„[Testimonial folgt — Platz für ein Zitat zum CV Maker / Karriereeinstieg in KI.]"',
+    quote: '„[Testimonial folgt: Platz für ein Zitat zum CV Maker / Karriereeinstieg in KI.]"',
     name: 'Name', role: 'AI Engineer, Unternehmen',
   },
 ]
 
 // ── FAQ ──────────────────────────────────────────────────────────────
 const faq = [
-  { q: 'Woher kommen die Daten?', a: 'Wir erfassen laufend öffentliche KI-Stellenanzeigen deutscher Unternehmen — aktuell über 10.000 Postings von mehr als 2.800 Firmen in 600+ Städten. Der Datensatz wächst täglich um durchschnittlich 152 Jobs.' },
-  { q: 'Wie funktioniert der Chatbot?', a: 'Sie stellen Ihre Frage in natürlicher Sprache. Der Chatbot übersetzt sie per SQL-Tool-Call in eine Datenbankabfrage und antwortet direkt aus dem vollständigen Datensatz — inklusive Quellen-Links zu den Postings.' },
+  { q: 'Woher kommen die Daten?', a: 'Wir erfassen laufend öffentliche KI-Stellenanzeigen deutscher Unternehmen: aktuell über 10.000 Postings von mehr als 2.800 Firmen in 600+ Städten. Der Datensatz wächst täglich um durchschnittlich 152 Jobs.' },
+  { q: 'Wie funktioniert der Chatbot?', a: 'Sie stellen Ihre Frage in natürlicher Sprache. Der Chatbot übersetzt sie per SQL-Tool-Call in eine Datenbankabfrage und antwortet direkt aus dem vollständigen Datensatz, inklusive Quellen-Links zu den Postings.' },
   { q: 'Was sind Search Credits?', a: 'Jede Chatbot-Anfrage verbraucht einen Credit. Basic enthält 100 Credits pro Monat, Pro 500. Das Dashboard selbst ist unbegrenzt nutzbar.' },
-  { q: 'Was ist das Career Memory?', a: 'Ihr persönliches Archiv aus Textblöcken — Erfahrungen, Projekte, Skills — extrahiert aus Ihren hochgeladenen CVs. Bei jeder Bewerbung wählt der CV Maker daraus automatisch die Blöcke, die am besten zur Stellenanzeige passen. Career Memory ist Teil des Pro-Plans.' },
-  { q: 'Welche CV-Templates gibt es?', a: 'Formate, die sich in Bewerbungsprozessen bei Google, Amazon und Microsoft bewährt haben — klar strukturiert, ATS-freundlich, auf Deutsch und Englisch.' },
+  { q: 'Was ist das Career Memory?', a: 'Ihr persönliches Archiv aus Textblöcken (Erfahrungen, Projekte, Skills), extrahiert aus Ihren hochgeladenen CVs. Bei jeder Bewerbung wählt der CV Maker daraus automatisch die Blöcke, die am besten zur Stellenanzeige passen. Career Memory ist Teil des Pro-Plans.' },
+  { q: 'Welche CV-Templates gibt es?', a: 'Formate, die sich in Bewerbungsprozessen bei Google, Amazon und Microsoft bewährt haben: klar strukturiert, ATS-freundlich, auf Deutsch und Englisch.' },
   { q: 'Kann ich monatlich kündigen?', a: 'Ja. Beide Pläne sind monatlich kündbar, ohne Mindestlaufzeit.' },
 ]
 const openFaq = ref(-1)
@@ -211,7 +205,7 @@ async function joinWaitlist() {
     await $fetch('/api/waitlist', { method: 'POST', body: { email: value } })
     joined.value = true
   } catch (e: any) {
-    waitlistError.value = e?.data?.message || 'Das hat nicht geklappt — bitte erneut versuchen.'
+    waitlistError.value = e?.data?.message || 'Das hat nicht geklappt, bitte erneut versuchen.'
   } finally {
     waitlistBusy.value = false
   }
@@ -251,7 +245,6 @@ async function joinWaitlist() {
       <p class="hero-sub">{{ personas[persona]!.sub }}</p>
       <div class="hero-cta-row">
         <a href="#waitlist" class="btn-primary">Waitlist beitreten</a>
-        <span class="hero-ticker">{{ stats.jobs }} JOBS · <span class="live-dot">● LIVE</span> · {{ today }}</span>
       </div>
     </header>
 
@@ -273,13 +266,13 @@ async function joinWaitlist() {
       <div class="chat-grid">
         <div class="chat-copy">
           <div class="kicker kicker--dark">□ QUERY.ENGINE // SQL.TOOL</div>
-          <h2 class="chat-title">Frag 10.000 Stellenanzeigen. Irgendwas.</h2>
+          <h2 class="chat-title">Echte Insights aus 10.000 Stellenanzeigen.</h2>
           <p class="chat-sub">
             Der Chatbot übersetzt Ihre Frage in SQL und antwortet direkt aus dem kompletten
-            Datensatz. Wettbewerber, Use Cases, Skills, Städte — keine Filter-Klickerei, einfach fragen.
+            Datensatz. Wettbewerber, Use Cases, Skills, Städte: keine Filter-Klickerei, einfach fragen.
           </p>
           <div class="chip-block">
-            <div class="chip-label">BELIEBTE FRAGEN — ANKLICKEN ZUM AUSPROBIEREN</div>
+            <div class="chip-label">BELIEBTE FRAGEN · ANKLICKEN ZUM AUSPROBIEREN</div>
             <div class="chip-row">
               <button
                 v-for="(c, i) in convos"
@@ -329,7 +322,7 @@ async function joinWaitlist() {
           <div class="card-body">
             <div class="card-title">Skills &amp; Tools als Landkarte</div>
             <p class="card-text">
-              Welche Tools dominieren welche Kohorte? Python, LangChain, RAG, AI Agents —
+              Welche Tools dominieren welche Kohorte? Python, LangChain, RAG, AI Agents,
               pro Funktion, Branche und Stadt aufgeschlüsselt.
             </p>
           </div>
@@ -340,7 +333,7 @@ async function joinWaitlist() {
             <div class="card-title">Wachstum &amp; Momentum</div>
             <p class="card-text">
               Neue Jobs, Firmen und Städte im Zeitverlauf. Erkennen, wann eine Branche
-              anzieht — bevor es alle wissen.
+              anzieht, bevor es alle wissen.
             </p>
             <div class="stat-row">
               <div class="stat"><div class="stat-num">{{ stats.jobs }}</div><div class="stat-cap">JOBS</div></div>
@@ -353,7 +346,7 @@ async function joinWaitlist() {
             <div class="card-tag">COMPETITOR.ALERTS</div>
             <div class="card-title">Wettbewerber-Alerts</div>
             <p class="card-text">
-              Firmen auf die Watchlist setzen — Benachrichtigung, sobald dort eine neue
+              Firmen auf die Watchlist setzen: Benachrichtigung, sobald dort eine neue
               KI-Stelle erscheint.
             </p>
             <div class="alert-demo">
@@ -390,7 +383,7 @@ async function joinWaitlist() {
           <div class="kicker">□ CV.MAKER // CAREER.MEMORY</div>
           <h2 class="cv-title">Ein CV pro Job. Automatisch.</h2>
           <p class="cv-sub">
-            Bestehende CVs hochladen — der CV Maker zerlegt sie in wiederverwendbare
+            Bestehende CVs hochladen: der CV Maker zerlegt sie in wiederverwendbare
             Textblöcke, baut daraus Ihr Career Memory und optimiert den Lebenslauf für
             jede Stelle individuell.
           </p>
@@ -424,7 +417,7 @@ async function joinWaitlist() {
               <span>RAG</span><span>LangChain</span><span class="cv-skill--hit">AI Agents</span>
             </div>
             <div class="ph-group"><div class="ph ph-h4 w-100" /><div class="ph ph-h4 w-94" /><div class="ph ph-h4 w-88" /></div>
-            <div class="cv-doc-note"><span>Career Memory:</span> Block „LLM-Rollout bei Kunde X" eingesetzt — passt zu Anforderung 3.</div>
+            <div class="cv-doc-note"><span>Career Memory:</span> Block „LLM-Rollout bei Kunde X" eingesetzt, passt zu Anforderung 3.</div>
           </div>
           <div class="cv-doc cv-doc--right">
             <div class="cv-doc-tag">TEMPLATE // AMAZON</div>
@@ -451,7 +444,7 @@ async function joinWaitlist() {
             <div><span class="check">✓</span>SQL-Chatbot · 100 Search Credits / Monat</div>
             <div><span class="check">✓</span>CV Maker mit allen Templates</div>
             <div><span class="check">✓</span>Wettbewerber-Alerts · 3 Firmen</div>
-            <div class="feature-muted"><span>—</span>Career Memory</div>
+            <div class="feature-muted"><span>–</span>Career Memory</div>
           </div>
           <a href="#waitlist" class="btn-outline">Waitlist beitreten</a>
         </div>
@@ -463,7 +456,7 @@ async function joinWaitlist() {
           <div class="price-features price-features--light">
             <div><span class="check">✓</span>Alles aus Basic</div>
             <div><span class="check">✓</span>SQL-Chatbot · 500 Search Credits / Monat</div>
-            <div><span class="check">✓</span><span><strong>Career Memory</strong> — CV pro Job automatisch optimiert</span></div>
+            <div><span class="check">✓</span><span><strong>Career Memory</strong>: CV pro Job automatisch optimiert</span></div>
             <div><span class="check">✓</span>Wettbewerber-Alerts · unbegrenzt</div>
             <div><span class="check">✓</span>Prioritäts-Support</div>
           </div>
@@ -503,7 +496,7 @@ async function joinWaitlist() {
       <div class="cta-inner">
         <div class="kicker kicker--dark">□ WAITLIST // EARLY.ACCESS</div>
         <h2 class="cta-title">Der KI-Arbeitsmarkt wartet nicht. Sie auch nicht.</h2>
-        <p class="cta-sub">Jetzt eintragen — Early-Access-Plätze werden in Wellen freigeschaltet.</p>
+        <p class="cta-sub">Jetzt eintragen: Early-Access-Plätze werden in Wellen freigeschaltet.</p>
         <form class="waitlist-form" @submit.prevent="joinWaitlist">
           <input
             v-model="email"
@@ -676,11 +669,6 @@ async function joinWaitlist() {
   text-wrap: pretty;
 }
 .hero-cta-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; }
-.hero-ticker {
-  font: 500 12px var(--l-mono);
-  color: var(--l-faint);
-  letter-spacing: 1px;
-}
 
 .btn-primary {
   display: inline-block;

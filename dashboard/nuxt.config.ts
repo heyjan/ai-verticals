@@ -85,6 +85,21 @@ export default defineNuxtConfig({
       // Private server-side storage; never serve this directory statically.
       storageRoot: process.env.NUXT_CV_BUILDER_STORAGE_ROOT || '.data/cv-builder',
     },
+    // SMTP for transactional mail (waitlist notifications). All values are
+    // bound at runtime from NUXT_SMTP_* / NUXT_WAITLIST_NOTIFY_TO. When host
+    // is unset the waitlist endpoint simply skips sending and still records
+    // the signup, so local dev needs no mail server.
+    smtp: {
+      host: process.env.NUXT_SMTP_HOST || '',
+      port: process.env.NUXT_SMTP_PORT || '587',
+      secure: process.env.NUXT_SMTP_SECURE === 'true',
+      user: process.env.NUXT_SMTP_USER || '',
+      pass: process.env.NUXT_SMTP_PASS || '',
+      from: process.env.NUXT_SMTP_FROM || 'ai-verticals <noreply@ai-verticals.de>',
+    },
+    // Where waitlist signup notifications are sent. Defaults to the Impressum
+    // contact address.
+    waitlistNotifyTo: process.env.NUXT_WAITLIST_NOTIFY_TO || 'jan@heyjan.de',
     // Encrypts the sealed session cookie. Override with NUXT_SESSION_PASSWORD
     // (>= 32 chars) in every non-dev environment; auth-utils auto-generates an
     // ephemeral one in dev if unset.
