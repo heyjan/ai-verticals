@@ -8,6 +8,7 @@
     "preview": "nuxt preview",
     "generate": "nuxt generate",
     "test:data-chat": "playwright test e2e/data-chat.spec.ts",
+    "test:fonts": "playwright test e2e/fonts.spec.ts",
     "test:cv-exports": "DATABASE_URL=postgres://cv-export-test:cv-export-test@127.0.0.1:5432/cv-export-test playwright test e2e/cv-export.spec.ts"
   },
   "dependencies": {
