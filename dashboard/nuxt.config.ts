@@ -1,19 +1,17 @@
 import tailwindcss from '@tailwindcss/vite'
 
-const enableGoogleFonts = process.env.NUXT_ENABLE_GOOGLE_FONTS === 'true'
-
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-11',
   modules: [
     '@tresjs/nuxt',
     'nuxt-auth-utils',
-    ...(enableGoogleFonts ? ['@nuxtjs/google-fonts'] : []),
+    '@nuxtjs/google-fonts',
   ],
-  googleFonts: enableGoogleFonts ? {
+  googleFonts: {
     families: {
       'IBM Plex Sans': [300, 400, 500, 600, 700],
       'IBM Plex Mono': [400, 500, 600, 700],
-      'Space Grotesk': [500, 600, 700],
+      'Inter Tight': [400, 500, 600, 700],
       Montserrat: [300, 400, 500, 600, 700],
       'Noto Sans': [300, 400, 500, 600, 700],
       Lato: [300, 400, 700],
@@ -21,7 +19,7 @@ export default defineNuxtConfig({
     display: 'swap',
     download: false,
     useStylesheet: true,
-  } : undefined,
+  },
   // Enable WebAuthn (passkey) server handlers + `useWebAuthn()` composable.
   auth: {
     webAuthn: true,

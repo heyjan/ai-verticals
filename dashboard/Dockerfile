@@ -28,10 +28,10 @@ FROM node:22-slim
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable && corepack prepare pnpm@11.13.1 --activate
-# NB: use a bare manifest instead of `pnpm init` — pnpm's init writes a
-# `packageManager: pnpm@^x.y.z` field (caret range) that corepack then
-# rejects on the next command ("expected a semver version").
-RUN echo '{"name":"dashboard-runtime","private":true}' > package.json \
+# Hand-written manifest instead of `pnpm init`: init emits a caret-ranged
+# packageManager plus a devEngines block, both of which corepack/npm reject.
+# Pin packageManager to the exact version so corepack accepts it.
+RUN printf '{"name":"dashboard-runtime","private":true,"packageManager":"pnpm@11.13.1"}' > package.json \
     && pnpm add playwright@1.61.1 \
     && pnpm exec playwright install --with-deps chromium \
     && pnpm store prune

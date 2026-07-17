@@ -109,7 +109,7 @@ useHead({
   --l-accent: #d92d2d;
   --l-sans: 'IBM Plex Sans', system-ui, sans-serif;
   --l-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --l-display: 'Space Grotesk', 'IBM Plex Sans', sans-serif;
+  --l-display: 'Inter Tight', sans-serif;
 
   background: var(--l-bg);
   color: var(--l-ink);

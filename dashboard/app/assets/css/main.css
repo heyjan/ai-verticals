@@ -3,6 +3,7 @@
 @theme {
   --font-mono: "IBM Plex Mono", monospace;
   --font-sans: "IBM Plex Sans", sans-serif;
+  --font-display: "Inter Tight", sans-serif;
 
   --color-ink: #1a1a2e;
   --color-ink-light: #3d3d5c;
@@ -24,6 +25,11 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
 }
 
 /* ── Blueprint grid background ─────────────────────────── */

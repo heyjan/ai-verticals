@@ -66,26 +66,26 @@ const convos = [
     chips: ['alle 12 anzeigen', 'Alert einrichten'],
   },
   {
-    label: 'Top-RAG-Skills in München?',
-    question: 'Welche Skills werden in Münchner RAG-Stellen am häufigsten verlangt?',
+    label: 'Top AI Skills in München?',
+    question: 'Welche Skills werden in Münchner AI Stellen am häufigsten verlangt?',
     sql: [
       ['SELECT', 'kw'], [' skill, COUNT(*) ', ''], ['FROM', 'kw'], [' posting_skills\n', ''],
-      ['WHERE', 'kw'], [" city = 'München' ", ''], ['AND', 'kw'], [" tags @> '{RAG}'\n", ''],
+      ['WHERE', 'kw'], [" city = 'München' ", ''], ['AND', 'kw'], [" tags @> '{AI}'\n", ''],
       ['GROUP BY', 'kw'], [' skill ', ''], ['ORDER BY', 'kw'], [' 2 DESC ', ''], ['LIMIT', 'kw'], [' 5;', ''],
     ],
-    lead: 'Top 5 in 87 Münchner RAG-Postings:',
+    lead: 'Top 5 in 87 Münchner AI Postings:',
     rest: 'Python (71), LangChain (58), Vektordatenbanken (44), OpenAI API (39), Kubernetes (21). LangChain wächst am schnellsten: +34 % ggü. Q1.',
     chips: ['als Chart anzeigen', 'Postings öffnen'],
   },
   {
-    label: 'Welche Banken suchen LLM-Engineers?',
-    question: 'Welche deutschen Banken suchen gerade LLM-Engineers?',
+    label: 'Welche Banken suchen AI-Engineers?',
+    question: 'Welche deutschen Banken suchen gerade AI-Engineers?',
     sql: [
       ['SELECT DISTINCT', 'kw'], [' company, city ', ''], ['FROM', 'kw'], [' postings\n', ''],
-      ['WHERE', 'kw'], [" industry = 'Banking' ", ''], ['AND', 'kw'], [' title ', ''], ['ILIKE', 'kw'], [" '%LLM%';", ''],
+      ['WHERE', 'kw'], [" industry = 'Banking' ", ''], ['AND', 'kw'], [' title ', ''], ['ILIKE', 'kw'], [" '%AI%';", ''],
     ],
     lead: '7 Banken, 11 offene Rollen:',
-    rest: 'darunter Deutsche Bank (3, Frankfurt), Commerzbank (2) und DZ Bank. 8 der 11 Postings nennen RAG als Kernanforderung.',
+    rest: 'darunter Deutsche Bank (3, Frankfurt), Commerzbank (2) und DZ Bank. 8 der 11 Postings nennen Python als Kernanforderung.',
     chips: ['alle 11 anzeigen', 'Branche abonnieren'],
   },
 ]
@@ -155,7 +155,7 @@ const cvSteps = [
   },
   {
     title: 'Bewährte Templates wählen',
-    text: 'CV-Formate, die bei Google, Amazon und Microsoft funktionieren.',
+    text: 'Templates, die bei Google, Amazon und Microsoft funktionieren.',
   },
   {
     title: 'Pro Job optimieren',
@@ -185,7 +185,7 @@ const faq = [
   { q: 'Wie funktioniert der Chatbot?', a: 'Sie stellen Ihre Frage in natürlicher Sprache. Der Chatbot übersetzt sie per SQL-Tool-Call in eine Datenbankabfrage und antwortet direkt aus dem vollständigen Datensatz, inklusive Quellen-Links zu den Postings.' },
   { q: 'Was sind Search Credits?', a: 'Jede Chatbot-Anfrage verbraucht einen Credit. Basic enthält 100 Credits pro Monat, Pro 500. Das Dashboard selbst ist unbegrenzt nutzbar.' },
   { q: 'Was ist das Career Memory?', a: 'Ihr persönliches Archiv aus Textblöcken (Erfahrungen, Projekte, Skills), extrahiert aus Ihren hochgeladenen CVs. Bei jeder Bewerbung wählt der CV Maker daraus automatisch die Blöcke, die am besten zur Stellenanzeige passen. Career Memory ist Teil des Pro-Plans.' },
-  { q: 'Welche CV-Templates gibt es?', a: 'Formate, die sich in Bewerbungsprozessen bei Google, Amazon und Microsoft bewährt haben: klar strukturiert, ATS-freundlich, auf Deutsch und Englisch.' },
+  { q: 'Welche CV-Templates gibt es?', a: 'Formate, die sich in Bewerbungsprozessen nachweislich bei Google, Amazon und Microsoft bewährt haben: klar strukturiert, ATS-freundlich, auf Deutsch und Englisch.' },
   { q: 'Kann ich monatlich kündigen?', a: 'Ja. Beide Pläne sind monatlich kündbar, ohne Mindestlaufzeit.' },
 ]
 const openFaq = ref(-1)
@@ -265,8 +265,8 @@ async function joinWaitlist() {
     <section id="chat" class="chat-section">
       <div class="chat-grid">
         <div class="chat-copy">
-          <div class="kicker kicker--dark">□ QUERY.ENGINE // SQL.TOOL</div>
-          <h2 class="chat-title">Echte Insights aus 10.000 Stellenanzeigen.</h2>
+          <div class="kicker kicker--dark">□ AI.AGENT // AGENT.TOOL</div>
+          <h2 class="chat-title">Echte Insights aus 10.000+ AI Stellenanzeigen.</h2>
           <p class="chat-sub">
             Der Chatbot übersetzt Ihre Frage in SQL und antwortet direkt aus dem kompletten
             Datensatz. Wettbewerber, Use Cases, Skills, Städte: keine Filter-Klickerei, einfach fragen.
@@ -287,7 +287,7 @@ async function joinWaitlist() {
 
         <div class="chat-window">
           <div class="chat-window-bar">
-            <span class="chat-window-label">CHAT.SESSION // SQL.TOOL</span>
+            <span class="chat-window-label">CHAT.SESSION // AGENT.TOOL</span>
             <span class="chat-window-status">● CONNECTED</span>
           </div>
           <div class="chat-body">
@@ -460,7 +460,7 @@ async function joinWaitlist() {
             <div><span class="check">✓</span>Wettbewerber-Alerts · unbegrenzt</div>
             <div><span class="check">✓</span>Prioritäts-Support</div>
           </div>
-          <a href="#waitlist" class="btn-primary btn-block">Waitlist beitreten</a>
+            <a href="#waitlist" class="btn-primary btn-block">Waitlist beitreten</a>
         </div>
       </div>
     </section>
@@ -543,7 +543,7 @@ async function joinWaitlist() {
   --l-dark-border: #34343f;
   --l-sans: 'IBM Plex Sans', system-ui, sans-serif;
   --l-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --l-display: 'Space Grotesk', 'IBM Plex Sans', sans-serif;
+  --l-display: 'Inter Tight', sans-serif;
 
   background: var(--l-bg);
   color: var(--l-ink);
