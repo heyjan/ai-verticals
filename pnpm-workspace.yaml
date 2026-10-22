@@ -10,3 +10,20 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   vue-demi: true
+
+# Pin transitive deps pulled in by nuxt / @nuxt/ui to patched versions.
+overrides:
+  '@nuxt/devtools': 3.4.4
+  '@nuxt/devtools-kit': 3.4.4
+  '@nuxt/icon': 2.5.1
+  '@nuxt/ui': 4.12.0
+  # drizzle-kit (even 0.31.11) still loads TS via the deprecated @esbuild-kit chain, which
+  # pins esbuild 0.18 (GHSA dev-server CORS); align it with drizzle-kit's own esbuild.
+  '@esbuild-kit/core-utils>esbuild': 0.25.12
+
+# Deliberately taken before pnpm's 1-day minimumReleaseAge (released 2026-10-22).
+# Exact versions only — drop these entries once they're older than a day.
+minimumReleaseAgeExclude:
+  - '@tresjs/cientos@5.10.0'
+  - '@tresjs/core@5.10.0'
+  - '@tresjs/nuxt@5.8.0'

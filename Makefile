@@ -72,17 +72,17 @@ help:
 
 build: build-compose build-scrapers build-classifier build-db ## Build all images
 
-build-compose: ## Build compose-managed services (postgres pulled)
-	$(DC) build
+build-compose: ## Build compose-managed services (base images re-pulled)
+	$(DC) build --pull
 
 build-scrapers: ## Build the scrapers image
-	$(DOCKER) build -t $(SCRAPERS_IMG) -f scrapers/Dockerfile .
+	$(DOCKER) build --pull -t $(SCRAPERS_IMG) -f scrapers/Dockerfile .
 
 build-classifier: ## Build the classifier image (used for one-off discover/classify/enrich)
-	$(DOCKER) build -t $(CLASSIFIER_IMG) -f classifier/Dockerfile .
+	$(DOCKER) build --pull -t $(CLASSIFIER_IMG) -f classifier/Dockerfile .
 
 build-db: ## Build the db image (used for one-off `make import`)
-	$(DOCKER) build -t $(DB_IMG) -f db/Dockerfile .
+	$(DOCKER) build --pull -t $(DB_IMG) -f db/Dockerfile .
 
 # ----- compose lifecycle -----------------------------------------------
 

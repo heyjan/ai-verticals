@@ -1,4 +1,4 @@
-FROM node:22-slim AS build
+FROM node:24-slim AS build
 
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -24,14 +24,14 @@ RUN pnpm run build
 # Dereference the pnpm symlinks so the runtime stage gets real files.
 RUN cp -rL node_modules/@fontsource /tmp/fontsource
 
-FROM node:22-slim
+FROM node:24-slim
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-RUN corepack enable && corepack prepare pnpm@11.13.1 --activate
+RUN corepack enable && corepack prepare pnpm@12.15.0 --activate
 # Hand-written manifest instead of `pnpm init`: init emits a caret-ranged
 # packageManager plus a devEngines block, both of which corepack/npm reject.
 # Pin packageManager to the exact version so corepack accepts it.
-RUN printf '{"name":"dashboard-runtime","private":true,"packageManager":"pnpm@11.13.1"}' > package.json \
+RUN printf '{"name":"dashboard-runtime","private":true,"packageManager":"pnpm@12.15.0"}' > package.json \
     && pnpm add playwright@1.61.1 \
     && pnpm exec playwright install --with-deps chromium \
     && pnpm store prune

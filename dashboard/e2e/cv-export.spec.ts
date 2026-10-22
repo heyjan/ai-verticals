@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import JSZip from 'jszip'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -12,6 +13,8 @@ import {
 } from '../server/utils/cv-builder'
 
 const dashboardRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+// Resolve deps through node's lookup so the path holds under pnpm's per-package node_modules.
+const requireFromHere = createRequire(import.meta.url)
 const screenshotDirectory = resolve(dashboardRoot, 'e2e/screenshots/cv-export')
 const artifactDirectory = resolve(dashboardRoot, 'test-results/cv-export')
 
@@ -152,8 +155,8 @@ test('PDF and DOCX exports preserve the same CV typography', async ({ page }) =>
   const pdfNameStyle = await typography(page.getByText('JANE EXAMPLE', { exact: true }))
   const pdfBodyStyle = await typography(page.getByText('2024 - present', { exact: true }))
 
-  const pdfModulePath = resolve(dashboardRoot, '../node_modules/pdfjs-dist/legacy/build/pdf.mjs')
-  const pdfWorkerPath = resolve(dashboardRoot, '../node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs')
+  const pdfModulePath = requireFromHere.resolve('pdfjs-dist/legacy/build/pdf.mjs')
+  const pdfWorkerPath = requireFromHere.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')
   await page.route('http://cv-export.test/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     if (path === '/pdf.mjs') {
