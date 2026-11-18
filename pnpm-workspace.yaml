@@ -19,7 +19,7 @@ overrides:
   '@nuxt/ui': 4.12.0
   # drizzle-kit (even 0.31.11) still loads TS via the deprecated @esbuild-kit chain, which
   # pins esbuild 0.18 (GHSA dev-server CORS); align it with drizzle-kit's own esbuild.
-  '@esbuild-kit/core-utils>esbuild': 0.25.12
+  '@esbuild-kit/core-utils>esbuild': 0.28.2
 
 # Deliberately taken before pnpm's 1-day minimumReleaseAge (released 2026-10-22).
 # Exact versions only — drop these entries once they're older than a day.
