@@ -211,8 +211,8 @@ importers:
         specifier: workspace:*
         version: link:../db
       '@ai-sdk/vue':
-        specifier: 4.0.18
-        version: 4.0.18(vue@3.5.44(typescript@5.9.3))(zod@4.4.3)
+        specifier: 4.0.179
+        version: 4.0.179(vue@3.5.44(typescript@5.9.3))(zod@4.4.3)
       '@fontsource/lato':
         specifier: ^5.2.7
         version: 5.2.7
@@ -407,8 +407,20 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/gateway@4.0.152':
+    resolution: {integrity: sha512-8LYMe0uMPbT3XW/Urhca52TSgHXAlQok74EUkWL3qXWJI7naTxJGSF6B7hvIHur+V6ttSyLLZN0rJk+Qu9psqA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider-utils@5.0.6':
     resolution: {integrity: sha512-i4mVayGtC+HrRmtfPFOxvKKQgFU+1dwTTsh4MY0jY1MaGuppOwDFrNYrJ3dDXWMkO3o6FDVAKY8ZDsy7hLsO9Q==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@5.0.83':
+    resolution: {integrity: sha512-5lInsmNnh64eKi2L3fQjPy5VnV2y69lwyGnZ3vfz82Tlkgy8pWsvYueUrSJGxi8gXOM67jB9tN7LtDjjEFsNLQ==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -417,8 +429,12 @@ packages:
     resolution: {integrity: sha512-pfPoy9J1B1xV7cqJ8MYHOsDYrMv5tR3+EMNfI249OhkD2uRakvav3Fo7XpD2luuN/YNCBY7KfEQc7vEV7KEtyw==}
     engines: {node: '>=22'}
 
-  '@ai-sdk/vue@4.0.18':
-    resolution: {integrity: sha512-Tiv0UOJaANlY+vSuA4AtWVH2TdaJ0xk0RPA+yBmM8NdygOFdDVFHAkUxi8YfcMHive0zxNFwOTxdTksYAW27uw==}
+  '@ai-sdk/provider@4.0.39':
+    resolution: {integrity: sha512-jRvAhvW23+TeMGVCME2WGejP/TjzyDg7TplUep3t8HcEYnC2/8zqhCy9RRrjjVs1ljcygABZ8pQ21MbCRdF01w==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/vue@4.0.179':
+    resolution: {integrity: sha512-HELp320mBtm2qqLLiAeHgFeknUTc7+Fz948TRYkRyJjnGCUO+0RPELkYFkavgbsLTIei3aZDrW3rBS+lZg5Ndw==}
     engines: {node: '>=22'}
     peerDependencies:
       vue: ^3.3.4
@@ -2773,6 +2789,12 @@ packages:
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
+
+  ai@7.0.179:
+    resolution: {integrity: sha512-WT2ad3qEQPLne/5RDE/utNMSKYUuNpnGkI46AO/6Lv+IbEJ3kRwbatLX3HNfk25Y7N8LpdqOcSnMLcdw11VyIQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   ai@7.0.18:
     resolution: {integrity: sha512-/DsiRfbLPtoHf9C47Hy+LK+HkjNowX1DQo3id4zWegfU6z1WjVDRAHYJAiX7SXhGp0mWX4tcenUhfIFessDWnw==}
@@ -5649,9 +5671,24 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
+  '@ai-sdk/gateway@4.0.152(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.39
+      '@ai-sdk/provider-utils': 5.0.83(zod@4.4.3)
+      '@vercel/oidc': 3.2.0
+      zod: 4.4.3
+
   '@ai-sdk/provider-utils@5.0.6(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 4.0.2
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.0
+      zod: 4.4.3
+
+  '@ai-sdk/provider-utils@5.0.83(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.39
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.0
@@ -5661,10 +5698,14 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/vue@4.0.18(vue@3.5.44(typescript@5.9.3))(zod@4.4.3)':
+  '@ai-sdk/provider@4.0.39':
     dependencies:
-      '@ai-sdk/provider-utils': 5.0.6(zod@4.4.3)
-      ai: 7.0.18(zod@4.4.3)
+      json-schema: 0.4.0
+
+  '@ai-sdk/vue@4.0.179(vue@3.5.44(typescript@5.9.3))(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider-utils': 5.0.83(zod@4.4.3)
+      ai: 7.0.179(zod@4.4.3)
       swrv: 1.2.0(vue@3.5.44(typescript@5.9.3))
       vue: 3.5.44(typescript@5.9.3)
     transitivePeerDependencies:
@@ -8279,6 +8320,13 @@ snapshots:
   acorn@8.19.0: {}
 
   agent-base@7.1.4: {}
+
+  ai@7.0.179(zod@4.4.3):
+    dependencies:
+      '@ai-sdk/gateway': 4.0.152(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.39
+      '@ai-sdk/provider-utils': 5.0.83(zod@4.4.3)
+      zod: 4.4.3
 
   ai@7.0.18(zod@4.4.3):
     dependencies:
