@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@ai-job-classifier/db": "workspace:*",
-    "@ai-sdk/vue": "4.0.18",
+    "@ai-sdk/vue": "4.0.184",
     "@fontsource/lato": "^5.2.7",
     "@fontsource/montserrat": "^5.2.8",
     "@fontsource/noto-sans": "^5.2.10",
